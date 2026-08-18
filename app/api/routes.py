@@ -22,6 +22,8 @@ from app.models.entities import (
 from app.schemas.domain import (
     AccountCreate,
     AccountRead,
+    CategoryCreate,
+    CategoryRead,
     BudgetCopyRequest,
     BudgetRead,
     BudgetUpsert,
@@ -143,6 +145,16 @@ def create_account(payload: AccountCreate, db: Session = Depends(get_db)):
 @router.get("/api/accounts", response_model=list[AccountRead])
 def list_accounts(db: Session = Depends(get_db)):
     return db.scalars(select(Account).order_by(Account.name)).all()
+
+
+@router.post("/api/categories", response_model=CategoryRead)
+def create_category(payload: CategoryCreate, db: Session = Depends(get_db)):
+    name = " ".join(payload.name.split())
+    if db.scalar(select(Category).where(Category.name == name)):
+        raise HTTPException(409, "Category already exists")
+    category = Category(name=name, parent_name=payload.parent_name, essential=payload.essential)
+    db.add(category); db.commit(); db.refresh(category)
+    return category
 
 
 @router.post("/api/imports", response_model=ImportResult)

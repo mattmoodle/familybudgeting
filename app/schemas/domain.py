@@ -16,6 +16,17 @@ class AccountRead(AccountCreate):
     active: bool
 
 
+class CategoryCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    parent_name: str | None = Field(default=None, max_length=80)
+    essential: bool = False
+
+
+class CategoryRead(CategoryCreate):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+
+
 class TransactionPatch(BaseModel):
     category: str | None = None
     excluded_from_analytics: bool | None = None
