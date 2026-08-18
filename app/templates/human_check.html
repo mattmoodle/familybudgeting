@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Human-check · Family Budget</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<main class="container human-check-shell">
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">HUMAN-CHECK · STAGING LOCALE</p>
+      <h1>Controllo import</h1>
+      <p class="muted">{{ batch.source_filename }} · nessuna riga entra nelle analisi finché non completi la revisione.</p>
+    </div>
+    <a class="button secondary" href="/">← Dashboard</a>
+  </header>
+
+  <section class="panel hc-progress-panel">
+    <div class="panel-heading">
+      <div><h2 id="phase-title">Conferma il parsing</h2><p class="muted small" id="phase-help">Confronta la riga originale con ciò che la piattaforma ha interpretato.</p></div>
+      <strong id="progress-label">0 / {{ progress.total }}</strong>
+    </div>
+    <div class="hc-progress"><i id="progress-bar"></i></div>
+  </section>
+
+  <section id="review-stage" class="hc-stage">
+    <article id="swipe-card" class="panel hc-card">
+      <div class="hc-sequence" id="sequence-label"></div>
+      <div class="hc-compare">
+        <div class="hc-original">
+          <span class="hc-label">ORIGINALE ESTRATTO</span>
+          <pre id="original-text"></pre>
+        </div>
+        <div class="hc-parsed">
+          <span class="hc-label">RISULTATO PARSING</span>
+          <dl class="hc-fields">
+            <div><dt>Data</dt><dd id="parsed-date"></dd></div>
+            <div><dt>Descrizione</dt><dd id="parsed-description"></dd></div>
+            <div><dt>Merchant</dt><dd id="parsed-merchant"></dd></div>
+            <div><dt>Importo</dt><dd id="parsed-amount"></dd></div>
+            <div><dt>Categoria</dt><dd id="parsed-category"></dd></div>
+            <div><dt>Confidenza</dt><dd id="parsed-confidence"></dd></div>
+          </dl>
+        </div>
+      </div>
+      <p class="hc-question">La riga è stata riconosciuta correttamente?</p>
+      <div class="hc-actions">
+        <button type="button" class="hc-no" onclick="decide('rejected')">✕ No</button>
+        <button type="button" class="hc-yes" onclick="decide('accepted')">✓ Sì</button>
+      </div>
+      <p class="muted small hc-shortcuts">Tastiera: ← / N = No · → / S / Y = Sì · su mobile puoi anche fare swipe.</p>
+    </article>
+  </section>
+
+  <section id="correction-stage" class="panel hc-correction" hidden>
+    <div class="panel-heading"><div><h2>Correggi le righe segnate “No”</h2><p class="muted small">Ora vengono richiesti i dettagli soltanto per gli elementi che non hai approvato.</p></div><span class="count-badge" id="correction-count"></span></div>
+    <div class="hc-original correction-original"><span class="hc-label">ORIGINALE ESTRATTO</span><pre id="correction-original"></pre></div>
+    <form id="correction-form" class="hc-form">
+      <label>Data<input type="date" id="correction-date" required></label>
+      <label>Descrizione<input type="text" id="correction-description" required></label>
+      <label>Importo<input type="number" id="correction-amount" step="0.01" required></label>
+      <label>Categoria<select id="correction-category" required>{% for c in categories %}<option value="{{ c.name }}">{{ c.name }}</option>{% endfor %}</select></label>
+      <label class="wide">Nota opzionale<textarea id="correction-note" rows="3" placeholder="Es. descrizione PDF troncata, importo con segno errato…"></textarea></label>
+      <div class="wide hc-form-actions"><button type="submit">Salva correzione e continua →</button></div>
+    </form>
+  </section>
+
+  <section id="complete-stage" class="panel hc-complete" hidden>
+    <span class="hc-complete-icon">✓</span>
+    <h2>Revisione completata</h2>
+    <p class="muted">Tutte le righe sono state approvate o corrette. Solo ora puoi inserirle nel libro mastro.</p>
+    <button type="button" id="finalize-button" onclick="finalizeBatch()">Conferma e importa nel budget</button>
+    <p id="finalize-status" class="muted small"></p>
+  </section>
+</main>
+<script>
+const batchId={{ batch.id }};
+let items=[];
+let pending=[];
+let rejected=[];
+let current=null;
+let correctionIndex=0;
+let touchStartX=null;
+
+const euro=v=>new Intl.NumberFormat('it-IT',{style:'currency',currency:'EUR'}).format(Number(v));
+const pct=v=>`${Math.round(Number(v)*100)}%`;
+
+async function loadItems(){
+  const r=await fetch(`/api/human-check/${batchId}/items`);
+  items=await r.json();
+  pending=items.filter(x=>x.decision==='pending');
+  rejected=items.filter(x=>x.decision==='rejected');
+  routePhase();
+}
+function updateProgress(){
+  const resolved=items.filter(x=>x.decision!=='pending').length;
+  document.getElementById('progress-label').textContent=`${resolved} / ${items.length}`;
+  document.getElementById('progress-bar').style.width=`${items.length?resolved/items.length*100:100}%`;
+}
+function routePhase(){
+  updateProgress();
+  pending=items.filter(x=>x.decision==='pending');
+  rejected=items.filter(x=>x.decision==='rejected');
+  if(pending.length){showReview(pending[0]);return;}
+  if(rejected.length){startCorrections();return;}
+  showComplete();
+}
+function showReview(item){
+  current=item;
+  document.getElementById('review-stage').hidden=false;
+  document.getElementById('correction-stage').hidden=true;
+  document.getElementById('complete-stage').hidden=true;
+  document.getElementById('phase-title').textContent='Conferma il parsing';
+  document.getElementById('phase-help').textContent='Sì se data, descrizione, importo e interpretazione sono corretti; No se c’è qualcosa da sistemare.';
+  document.getElementById('sequence-label').textContent=`Riga ${item.sequence} di ${items.length}`;
+  document.getElementById('original-text').textContent=item.original_text;
+  document.getElementById('parsed-date').textContent=item.parsed_booked_on;
+  document.getElementById('parsed-description').textContent=item.parsed_description;
+  document.getElementById('parsed-merchant').textContent=item.parsed_merchant||'—';
+  const amount=document.getElementById('parsed-amount'); amount.textContent=euro(item.parsed_amount); amount.className=Number(item.parsed_amount)<0?'negative':'positive';
+  document.getElementById('parsed-category').textContent=item.parsed_category;
+  document.getElementById('parsed-confidence').textContent=pct(item.parsed_confidence);
+}
+async function decide(decision){
+  if(!current)return;
+  const card=document.getElementById('swipe-card');
+  card.classList.add(decision==='accepted'?'swipe-right':'swipe-left');
+  const id=current.id;
+  const r=await fetch(`/api/human-check/items/${id}/decision`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({decision})});
+  if(!r.ok){card.className='panel hc-card';alert('Impossibile salvare la decisione');return;}
+  const updated=await r.json();
+  items=items.map(x=>x.id===id?updated:x);
+  setTimeout(()=>{card.className='panel hc-card';routePhase();},180);
+}
+function startCorrections(){
+  document.getElementById('review-stage').hidden=true;
+  document.getElementById('correction-stage').hidden=false;
+  document.getElementById('complete-stage').hidden=true;
+  document.getElementById('phase-title').textContent='Dettagli aggiuntivi';
+  document.getElementById('phase-help').textContent='Una alla volta, correggi soltanto le righe che hai flaggato No.';
+  correctionIndex=0; showCorrection();
+}
+function showCorrection(){
+  rejected=items.filter(x=>x.decision==='rejected');
+  if(!rejected.length){routePhase();return;}
+  const item=rejected[0]; current=item;
+  document.getElementById('correction-count').textContent=`${rejected.length} da correggere`;
+  document.getElementById('correction-original').textContent=item.original_text;
+  document.getElementById('correction-date').value=item.parsed_booked_on;
+  document.getElementById('correction-description').value=item.parsed_description;
+  document.getElementById('correction-amount').value=Number(item.parsed_amount).toFixed(2);
+  document.getElementById('correction-category').value=item.parsed_category;
+  document.getElementById('correction-note').value='';
+}
+document.getElementById('correction-form').addEventListener('submit',async e=>{
+  e.preventDefault(); if(!current)return;
+  const body={booked_on:document.getElementById('correction-date').value,description:document.getElementById('correction-description').value,amount:Number(document.getElementById('correction-amount').value),category:document.getElementById('correction-category').value,note:document.getElementById('correction-note').value||null};
+  const r=await fetch(`/api/human-check/items/${current.id}/correction`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(!r.ok){alert('Impossibile salvare la correzione');return;}
+  const updated=await r.json(); items=items.map(x=>x.id===updated.id?updated:x); updateProgress(); showCorrection();
+});
+function showComplete(){
+  document.getElementById('review-stage').hidden=true;
+  document.getElementById('correction-stage').hidden=true;
+  document.getElementById('complete-stage').hidden=false;
+  document.getElementById('phase-title').textContent='Pronto per il commit';
+  document.getElementById('phase-help').textContent='Il controllo è completo, ma le transazioni sono ancora fuori dal libro mastro.';
+}
+async function finalizeBatch(){
+  const button=document.getElementById('finalize-button'), status=document.getElementById('finalize-status');
+  button.disabled=true; status.textContent='Importazione e riconciliazione in corso…';
+  const r=await fetch(`/api/human-check/${batchId}/finalize`,{method:'POST'}); const data=await r.json();
+  if(r.ok){status.textContent=`Importate ${data.imported} righe; saltate ${data.skipped}.`;setTimeout(()=>location.href='/',700)}
+  else{button.disabled=false;status.textContent=data.detail||'Finalizzazione non riuscita.';}
+}
+document.addEventListener('keydown',e=>{if(current&&pending.length){if(['ArrowLeft','n','N'].includes(e.key))decide('rejected');if(['ArrowRight','s','S','y','Y'].includes(e.key))decide('accepted');}});
+const card=document.getElementById('swipe-card');
+card.addEventListener('touchstart',e=>{touchStartX=e.changedTouches[0].screenX},{passive:true});
+card.addEventListener('touchend',e=>{if(touchStartX===null)return;const dx=e.changedTouches[0].screenX-touchStartX;touchStartX=null;if(dx>70)decide('accepted');else if(dx<-70)decide('rejected')},{passive:true});
+loadItems();
+</script>
+</body>
+</html>

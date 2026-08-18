@@ -1,0 +1,85 @@
+from decimal import Decimal
+
+from app.services.importers.bcc_pdf_importer import BccBankPdfImporter
+from app.services.importers.bper_pdf_importer import BperPdfImporter
+from app.services.importers.numia_pdf_importer import NumiaCardPdfImporter
+from app.services.importers.paypal_pdf_importer import PaypalPdfImporter
+from app.services.importers.satispay_pdf_importer import SatispayPdfImporter
+
+
+def test_numia_card_signs_and_multiline_fx():
+    text = """
+    Numia S.p.A. Carta N. 0000 **** **** 0000
+    DATA ACQUISTO DATA REGISTR. DESCRIZIONE DELLE OPERAZIONI IMPORTO IN EURO
+    23/07/2026 24/07/2026 OPENAI *CHATGPT SUBSCR SAN FRANCISCO CA
+    24,40 USD 21,41
+    15/04/2026 15/04/2026 MGP*Vinted Vilnius LTU -2,60
+    29/04/2026 29/04/2026 ADDEBITO IN C/C -1.333,29
+    """
+    rows = NumiaCardPdfImporter().parse_text(text)
+    assert [r.amount for r in rows] == [Decimal("-21.41"), Decimal("2.60"), Decimal("1333.29")]
+
+
+def test_paypal_rows_keep_transaction_ids_and_currency():
+    text = """
+    Cronologia transazioni - EUR
+    Data Descrizione Nome \\ Email Lordo Tariffa Netto
+    07/07/26 Pagamento Express Checkout
+    ID: TESTPAYPAL000001
+    Example Energy SRL
+    merchant@example.test -40,68 0,00 -40,68
+    07/07/26 Bonifico bancario sul conto PayPal
+    ID: TESTPAYPAL000002 40,68 0,00 40,68
+    Cronologia transazioni - USD
+    29/07/26 Pagamento cumulativo
+    ID: TESTPAYPAL000003
+    Example Merchant
+    service@example.test 0,01 0,00 0,01
+    """
+    rows = PaypalPdfImporter().parse_text(text)
+    assert rows[0].amount == Decimal("-40.68")
+    assert "TESTPAYPAL000001" in rows[0].description
+    assert rows[1].amount == Decimal("40.68")
+    assert rows[2].currency == "USD"
+
+
+def test_satispay_transaction_amount_is_first_amount():
+    text = """
+    Lista Transazioni Satispay
+    Data Transazione Importo Tipo Disponibilità Disponibilità dopo la transazione ID
+    27 lug 2026
+    00:16
+    Ricarica Satispay
+    Da (IT*****0000)
+    150,00 € Dalla Banca
+    Approvato
+    150,00 € 150,00 € 00000000-0000-4000-8000-000000000001
+    26 lug 2026
+    10:27
+    PagoPA -25,85 € PagoPA
+    Approvato
+    -25,85 € -25,85 € 00000000-0000-4000-8000-000000000002
+    """
+    rows = SatispayPdfImporter().parse_text(text)
+    assert [r.amount for r in rows] == [Decimal("150.00"), Decimal("-25.85")]
+    assert "00000000" in rows[0].description
+
+
+def test_bcc_movimenti_globali_signed_amounts():
+    text = """
+    Banca di Credito Cooperativo di Roma Movimenti Globali
+    EXAMPLE HOLDER, SECOND HOLDER Z0000000000000000000000 21/07/2026 21/07/2026 -120,00 Pagamenti diversi SDD Commerciale - Rich. Incasso SE Ricarica dell'app Satispay Example Wallet S.A. TESTREF0000000001
+    EXAMPLE HOLDER, SECOND HOLDER Z0000000000000000000000 20/07/2026 20/07/2026 131,10 Bonifico a Vostro favore Bonifico a vs favore *DEMO BENEFIT
+    """
+    rows = BccBankPdfImporter().parse_text(text)
+    assert [r.amount for r in rows] == [Decimal("-120.00"), Decimal("131.10")]
+
+
+def test_bper_new_layout_sign_column():
+    text = """
+    ABI: 05387 BIC: BPMOIT22 XXX
+    1/07/26 A 1.100,00 1/07/26 BONIFICO ISTANTANEO o/c: EXAMPLE HOLDER a favore di EXAMPLE RECIPIENT
+    15/07/26 D 1.090,77 15/07/26 RATA PRESTITO Fin. TEST-LOAN-000001
+    """
+    rows = BperPdfImporter().parse_text(text)
+    assert [r.amount for r in rows] == [Decimal("1100.00"), Decimal("-1090.77")]

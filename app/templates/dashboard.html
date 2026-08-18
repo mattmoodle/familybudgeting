@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Family Budget Offline</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <main class="container">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">LOCAL • PRIVATE • OFFLINE</p>
+        <h1>Family Budget</h1>
+        <p class="muted">Un unico libro mastro locale per conti, carte, PayPal e Satispay.</p>
+      </div>
+      <div class="header-actions">
+        <button class="button secondary" type="button" onclick="document.getElementById('account-dialog').showModal()">+ Conto</button>
+        <a class="button secondary" href="/docs">API</a>
+      </div>
+    </header>
+
+    <section class="panel filters-panel">
+      <form method="get" class="filters">
+        <div><label>Dal</label><input type="date" name="start" value="{{ filters.start or '' }}"></div>
+        <div><label>Al</label><input type="date" name="end" value="{{ filters.end or '' }}"></div>
+        <div><label>Conto</label><select name="account_id"><option value="">Tutti</option>{% for account in accounts %}<option value="{{ account.id }}" {% if filters.account_id == account.id %}selected{% endif %}>{{ account.name }}</option>{% endfor %}</select></div>
+        <div><label>Categoria</label><select name="category"><option value="">Tutte</option>{% for c in categories %}<option value="{{ c.name }}" {% if filters.category == c.name %}selected{% endif %}>{{ c.name }}</option>{% endfor %}</select></div>
+        <div class="filter-actions"><button type="submit">Applica</button><a class="button secondary" href="/">Reset</a></div>
+      </form>
+    </section>
+
+    <section class="cards">
+      <article class="card"><span>Entrate</span><strong>€{{ '%.2f'|format(summary.income) }}</strong></article>
+      <article class="card"><span>Spese</span><strong>€{{ '%.2f'|format(summary.expenses) }}</strong></article>
+      <article class="card"><span>Cash flow netto</span><strong class="{% if summary.net_cashflow < 0 %}negative{% endif %}">€{{ '%.2f'|format(summary.net_cashflow) }}</strong></article>
+      <article class="card"><span>Tasso di risparmio</span><strong>{% if summary.savings_rate is not none %}{{ summary.savings_rate }}%{% else %}—{% endif %}</strong></article>
+    </section>
+
+    <section class="panel budget-panel">
+      <div class="panel-heading budget-heading">
+        <div><h2>Budget mensile</h2><p class="muted small">Confronto tra tetto impostato, consuntivo e proiezione a fine mese.</p></div>
+        <div class="budget-actions">
+          <form method="get" class="month-picker">
+            <label for="budget-month">Mese</label>
+            <input id="budget-month" type="month" name="budget_month" value="{{ budget_month }}" onchange="this.form.submit()">
+          </form>
+          <button class="button secondary" type="button" onclick="copyPreviousBudgets()">Copia mese precedente</button>
+        </div>
+      </div>
+      <div class="budget-kpis">
+        <div><span>Budget totale</span><strong>€{{ '%.2f'|format(budget_report.total_budget) }}</strong></div>
+        <div><span>Speso</span><strong>€{{ '%.2f'|format(budget_report.total_actual) }}</strong></div>
+        <div><span>Residuo</span><strong class="{% if budget_report.total_remaining < 0 %}negative{% endif %}">€{{ '%.2f'|format(budget_report.total_remaining) }}</strong></div>
+        <div><span>Proiezione fine mese</span><strong class="{% if budget_report.projected_delta < 0 %}negative{% endif %}">€{{ '%.2f'|format(budget_report.total_projected) }}</strong></div>
+        <div><span>Ricorrenze ancora attese</span><strong>€{{ '%.2f'|format(budget_report.total_recurring_future) }}</strong></div>
+        <div><span>Trend variabile residuo</span><strong>€{{ '%.2f'|format(budget_report.total_variable_remaining_projection) }}</strong></div>
+      </div>
+      <p class="muted small budget-method">Forecast ibrido: separa le spese ricorrenti riconosciute dal trend delle spese variabili. Le ricorrenze future vengono aggiunte una sola volta, evitando il doppio conteggio nel run-rate. Per mesi conclusi la proiezione coincide con il consuntivo.</p>
+      <div class="table-wrap">
+        <table class="budget-table">
+          <thead><tr><th>Categoria</th><th>Budget</th><th>Speso</th><th>Utilizzo</th><th>Residuo</th><th>Proiezione</th><th>Stato</th><th></th></tr></thead>
+          <tbody>
+          {% for item in budget_report['items'] %}
+            <tr>
+              <td><strong>{{ item.category }}</strong></td>
+              <td><div class="budget-input-wrap"><span>€</span><input class="budget-input" type="number" min="0" step="0.01" value="{{ '%.2f'|format(item.budget) }}" data-category="{{ item.category }}"></div></td>
+              <td>€{{ '%.2f'|format(item.actual) }}</td>
+              <td>{% if item.used_pct is not none %}{{ item.used_pct }}%{% else %}—{% endif %}</td>
+              <td class="{% if item.remaining < 0 %}negative{% endif %}">€{{ '%.2f'|format(item.remaining) }}</td>
+              <td>
+                <strong>€{{ '%.2f'|format(item.projected) }}</strong>
+                {% if item.recurring_future > 0 or item.variable_remaining_projection > 0 %}
+                <div class="forecast-breakdown">+ trend €{{ '%.2f'|format(item.variable_remaining_projection) }} · ricorrenze €{{ '%.2f'|format(item.recurring_future) }}{% if item.recurring_future_count %} ({{ item.recurring_future_count }}){% endif %}</div>
+                {% endif %}
+              </td>
+              <td>
+                {% if item.status == 'over' %}<span class="budget-status over">oltre budget</span>
+                {% elif item.status == 'risk' %}<span class="budget-status risk">a rischio</span>
+                {% elif item.status == 'warning' %}<span class="budget-status warning">quasi esaurito</span>
+                {% elif item.status == 'on_track' %}<span class="budget-status ok">in linea</span>
+                {% elif item.status == 'unbudgeted' %}<span class="budget-status neutral">non pianificato</span>
+                {% else %}<span class="budget-status neutral">—</span>{% endif %}
+              </td>
+              <td><button class="icon-button" type="button" onclick="saveBudget(this, '{{ item.category|replace("'", "\'") }}')">Salva</button></td>
+            </tr>
+          {% endfor %}
+          {% set existing_names = budget_report['items'] | map(attribute='category') | list %}
+          {% for c in categories %}
+            {% if c.name not in existing_names and c.name not in ['Income', 'Uncategorized'] %}
+            <tr>
+              <td><strong>{{ c.name }}</strong></td>
+              <td><div class="budget-input-wrap"><span>€</span><input class="budget-input" type="number" min="0" step="0.01" value="0.00" data-category="{{ c.name }}"></div></td>
+              <td>€0.00</td><td>—</td><td>€0.00</td><td>€0.00</td><td><span class="budget-status neutral">—</span></td>
+              <td><button class="icon-button" type="button" onclick="saveBudget(this, '{{ c.name|replace("'", "\'") }}')">Salva</button></td>
+            </tr>
+            {% endif %}
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <p id="budget-status" class="muted small" role="status"></p>
+    </section>
+
+    <section class="dashboard-grid">
+      <article class="panel chart-panel wide">
+        <div class="panel-heading"><div><h2>Andamento mensile</h2><p class="muted small">Entrate, spese e saldo nel periodo selezionato.</p></div></div>
+        <div id="cashflow-chart" class="chart" aria-label="Grafico andamento mensile"></div>
+      </article>
+      <article class="panel chart-panel">
+        <div class="panel-heading"><div><h2>Spese per categoria</h2><p class="muted small">Categorie principali nel periodo.</p></div></div>
+        <div id="category-chart" class="category-chart"></div>
+      </article>
+    </section>
+
+    <section class="panel grid-2">
+      <div>
+        <h2>Importa estratto conto</h2>
+        <form id="import-form" enctype="multipart/form-data">
+          <label>Conto / strumento</label>
+          <select name="account_id" required>
+            <option value="" disabled selected>Seleziona...</option>
+            {% for account in accounts %}<option value="{{ account.id }}">{{ account.name }} · {{ account.account_type }}</option>{% endfor %}
+          </select>
+          <label>PDF / CSV / XLSX</label>
+          <input type="file" name="file" accept=".pdf,.csv,.xlsx,.xlsm" required>
+          <label>Modalità import</label>
+          <select name="mode"><option value="standard">Standard · importa subito</option><option value="human-check">Human-check · verifica ogni riga</option></select>
+          <button type="submit">Importa localmente</button>
+          <p id="import-status" class="muted small" role="status"></p>
+        </form>
+        {% if not accounts %}<p class="notice">Crea prima almeno un conto con il pulsante “+ Conto”.</p>{% endif %}
+      </div>
+      <div>
+        <h2>Qualità dei dati</h2>
+        <dl>
+          <div><dt>Righe duplicate</dt><dd>{{ summary.duplicate_rows }}</dd></div>
+          <div><dt>Trasferimenti interni esclusi</dt><dd>€{{ '%.2f'|format(summary.excluded_internal_transfers) }}</dd></div>
+          <div><dt>Da verificare</dt><dd>{{ review|length }}</dd></div>
+        </dl>
+        <p class="muted small">Le righe originali non vengono cancellate. Esclusioni, riconciliazioni e correzioni restano reversibili.</p>
+      </div>
+    </section>
+
+    <section class="dashboard-grid recurring-grid">
+      <article class="panel">
+        <div class="panel-heading">
+          <div><h2>Struttura dei costi</h2><p class="muted small">Ricorrenti fissi, ricorrenti variabili e spese occasionali.</p></div>
+        </div>
+        {% set cost_total = cost_structure.total if cost_structure.total else 0 %}
+        <div class="cost-structure">
+          <div class="cost-row"><div><span class="cost-dot fixed"></span><strong>Fissi</strong><small>{{ cost_structure.fixed_count }} movimenti</small></div><span>€{{ '%.2f'|format(cost_structure.fixed) }}</span></div>
+          <div class="progress"><i class="fixed-bar" style="width:{% if cost_total %}{{ (cost_structure.fixed / cost_total * 100)|round(1) }}{% else %}0{% endif %}%"></i></div>
+          <div class="cost-row"><div><span class="cost-dot variable"></span><strong>Variabili ricorrenti</strong><small>{{ cost_structure.variable_count }} movimenti</small></div><span>€{{ '%.2f'|format(cost_structure.variable) }}</span></div>
+          <div class="progress"><i class="variable-bar" style="width:{% if cost_total %}{{ (cost_structure.variable / cost_total * 100)|round(1) }}{% else %}0{% endif %}%"></i></div>
+          <div class="cost-row"><div><span class="cost-dot occasional"></span><strong>Occasionali</strong><small>{{ cost_structure.occasional_count }} movimenti</small></div><span>€{{ '%.2f'|format(cost_structure.occasional) }}</span></div>
+          <div class="progress"><i class="occasional-bar" style="width:{% if cost_total %}{{ (cost_structure.occasional / cost_total * 100)|round(1) }}{% else %}0{% endif %}%"></i></div>
+        </div>
+      </article>
+      <article class="panel">
+        <div class="panel-heading">
+          <div><h2>Prossime uscite previste</h2><p class="muted small">Previsione locale a 60 giorni basata sulle ricorrenze osservate.</p></div>
+          <span class="count-badge">{{ forecast|length }}</span>
+        </div>
+        {% if forecast %}
+        <div class="forecast-list">
+          {% for item in forecast %}
+          <div class="forecast-row">
+            <time>{{ item.expected_on.strftime('%d/%m') }}</time>
+            <div><strong>{{ item.merchant }}</strong><small>{{ item.category }} · {{ item.cadence }}</small></div>
+            <span>≈ €{{ '%.2f'|format(item.estimated_amount) }}</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}<p class="muted">Servono almeno tre occorrenze regolari dello stesso merchant per produrre una previsione.</p>{% endif %}
+      </article>
+    </section>
+
+    <section class="panel">
+      <div class="panel-heading">
+        <div><h2>Ricorrenze e abbonamenti</h2><p class="muted small">Rilevati automaticamente da frequenza e stabilità degli importi. Nessun servizio esterno.</p></div>
+        <span class="count-badge">{{ recurring|length }}</span>
+      </div>
+      {% if recurring %}
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Merchant</th><th>Categoria</th><th>Frequenza</th><th>Tipo</th><th>Media</th><th>Occorrenze</th><th>Prossima</th><th>Stato</th><th></th></tr></thead>
+          <tbody>
+          {% for item in recurring %}
+            <tr>
+              <td><strong>{{ item.merchant }}</strong>{% if item.manual_override %}<small class="manual-mark">controllo manuale</small>{% endif %}</td>
+              <td>{{ item.category }}</td>
+              <td>{{ item.cadence }}</td>
+              <td><span class="pill {% if item.cost_type == 'fixed' %}ok{% else %}neutral{% endif %}">{{ 'fisso' if item.cost_type == 'fixed' else 'variabile' }}</span></td>
+              <td>€{{ '%.2f'|format(item.average_amount) }}</td>
+              <td>{{ item.occurrences }}</td>
+              <td>{{ item.next_expected.strftime('%d/%m/%Y') }}</td>
+              <td>{% if item.management_status == 'confirmed' %}<span class="pill ok">confermata</span>{% elif item.management_status == 'paused' %}<span class="pill warn">sospesa</span>{% elif item.management_status == 'ended' %}<span class="pill neutral">terminata</span>{% else %}<span class="pill neutral">auto {{ '%.0f'|format(item.confidence * 100) }}%</span>{% endif %}</td>
+              <td><button type="button" class="icon-button" onclick='openRecurrence({{ item.key|tojson }}, {{ item.merchant|tojson }}, {{ item.category|tojson }}, {{ item.cadence|tojson }}, {{ item.average_amount }}, {{ item.next_expected.isoformat()|tojson }}, {{ item.management_status|tojson }}, {{ (item.note or "")|tojson }})'>Gestisci</button></td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}<p class="muted">Nessuna ricorrenza sufficientemente regolare rilevata nel periodo selezionato.</p>{% endif %}
+    </section>
+
+    <section class="panel">
+      <div class="panel-heading"><div><h2>Da verificare</h2><p class="muted small">Transazioni non classificate o con confidenza inferiore al 75%.</p></div><span class="count-badge">{{ review|length }}</span></div>
+      {% if review %}
+      <div class="review-list">
+        {% for tx in review %}
+        <article class="review-row" id="review-{{ tx.id }}">
+          <div class="review-main"><span class="date">{{ tx.booked_on }}</span><strong>{{ tx.description }}</strong><span class="muted small">Confidenza {{ '%.0f'|format(tx.category_confidence * 100) }}%</span></div>
+          <div class="amount {% if tx.amount < 0 %}negative{% endif %}">€{{ '%.2f'|format(tx.amount) }}</div>
+          <div class="review-controls">
+            <select class="category-select" data-tx="{{ tx.id }}">{% for c in categories %}<option value="{{ c.name }}" {% if tx.category == c.name %}selected{% endif %}>{{ c.name }}</option>{% endfor %}</select>
+            <label class="check"><input type="checkbox" class="learn-rule" data-tx="{{ tx.id }}" checked> ricorda regola</label>
+            <button type="button" onclick="saveCategory({{ tx.id }})">Salva</button>
+          </div>
+        </article>
+        {% endfor %}
+      </div>
+      {% else %}<p class="muted">Nessuna transazione richiede revisione.</p>{% endif %}
+    </section>
+
+    <section class="panel">
+      <h2>Opportunità di risparmio</h2>
+      {% if suggestions %}
+      <div class="suggestions">
+      {% for item in suggestions %}
+        <article><strong>{{ item.title }}</strong><p>{{ item.explanation }}</p><span>≈ €{{ item.estimated_monthly_saving }}/mese</span></article>
+      {% endfor %}
+      </div>
+      {% else %}<p class="muted">Servono alcuni mesi di movimenti discrezionali per generare suggerimenti basati sui dati.</p>{% endif %}
+    </section>
+
+    <section class="panel">
+      <div class="panel-heading"><div><h2>Transazioni</h2><p class="muted small">Ultime 100 righe che rispettano i filtri in alto.</p></div></div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Data</th><th>Descrizione</th><th>Categoria</th><th>Importo</th><th>Stato</th><th></th></tr></thead>
+        <tbody>
+        {% for tx in recent %}
+          <tr id="tx-{{ tx.id }}" class="{% if tx.excluded_from_analytics %}excluded-row{% endif %}">
+            <td>{{ tx.booked_on }}</td><td class="description-cell">{{ tx.description }}</td><td><span class="category-label">{{ tx.category }}</span></td>
+            <td class="number {% if tx.amount < 0 %}negative{% else %}positive{% endif %}">€{{ '%.2f'|format(tx.amount) }}</td>
+            <td>{% if tx.is_duplicate %}<span class="pill warn">duplicato</span>{% elif tx.is_internal_transfer %}<span class="pill neutral">trasferimento</span>{% elif tx.excluded_from_analytics %}<span class="pill neutral">escluso</span>{% else %}<span class="pill ok">conteggiato</span>{% endif %}</td>
+            <td><button class="icon-button" type="button" title="Modifica" onclick="openEdit({{ tx.id }}, '{{ tx.category|replace("'", "\\'") }}', {{ 'true' if tx.excluded_from_analytics else 'false' }})">Modifica</button></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+    </section>
+  </main>
+
+  <dialog id="recurrence-dialog">
+    <form id="recurrence-form" class="dialog-form">
+      <div class="dialog-title"><h2>Gestisci ricorrenza</h2><button type="button" class="close" onclick="this.closest('dialog').close()">×</button></div>
+      <input type="hidden" name="pattern_key">
+      <input type="hidden" name="merchant">
+      <input type="hidden" name="category">
+      <p id="recurrence-title" class="muted"></p>
+      <label>Stato</label>
+      <select name="status"><option value="confirmed">Confermata</option><option value="paused">Sospesa temporaneamente</option><option value="ended">Terminata</option><option value="rejected">Non è una ricorrenza</option></select>
+      <label>Frequenza</label>
+      <select name="override_cadence"><option value="">Rilevata automaticamente</option><option value="weekly">Settimanale</option><option value="biweekly">Bisettimanale</option><option value="monthly">Mensile</option><option value="bimonthly">Bimestrale</option><option value="quarterly">Trimestrale</option><option value="semiannual">Semestrale</option><option value="annual">Annuale</option></select>
+      <label>Importo previsto (€)</label><input name="override_amount" type="number" min="0" step="0.01" placeholder="Lascia vuoto per usare la media">
+      <label>Prossima data prevista</label><input name="override_next_expected" type="date">
+      <label>Nota</label><textarea name="note" rows="2" placeholder="es. rata finale a dicembre"></textarea>
+      <div class="dialog-actions"><button type="submit">Salva</button><button type="button" class="button secondary" onclick="resetRecurrence()">Ripristina automatico</button></div>
+      <p id="recurrence-status" class="muted small" role="status"></p>
+    </form>
+  </dialog>
+
+  <dialog id="account-dialog">
+    <form id="account-form" class="dialog-form"><div class="dialog-title"><h2>Nuovo conto</h2><button type="button" class="close" onclick="this.closest('dialog').close()">×</button></div>
+      <label>Nome</label><input name="name" required maxlength="120" placeholder="es. BCC Conto corrente">
+      <label>Tipo</label><select name="account_type"><option value="bank">Conto bancario</option><option value="card">Carta</option><option value="paypal">PayPal</option><option value="satispay">Satispay</option><option value="cash">Contanti</option><option value="other">Altro</option></select>
+      <button type="submit">Crea conto</button><p id="account-status" class="muted small"></p>
+    </form>
+  </dialog>
+
+  <dialog id="edit-dialog">
+    <form id="edit-form" class="dialog-form"><div class="dialog-title"><h2>Modifica transazione</h2><button type="button" class="close" onclick="this.closest('dialog').close()">×</button></div>
+      <input type="hidden" id="edit-id">
+      <label>Categoria</label><select id="edit-category">{% for c in categories %}<option value="{{ c.name }}">{{ c.name }}</option>{% endfor %}</select>
+      <label class="check"><input type="checkbox" id="edit-create-rule"> Applica automaticamente a movimenti simili futuri</label>
+      <label class="check"><input type="checkbox" id="edit-excluded"> Escludi dalle analisi</label>
+      <label>Nota</label><textarea id="edit-note" rows="3" placeholder="Nota opzionale"></textarea>
+      <button type="submit">Salva modifica</button><p id="edit-status" class="muted small"></p>
+    </form>
+  </dialog>
+
+<script>
+const cashflow = {{ cashflow | tojson }};
+const categoryTotals = {{ category_totals | tojson }};
+
+function euro(v){ return new Intl.NumberFormat('it-IT',{style:'currency',currency:'EUR'}).format(Number(v)); }
+
+function renderCashflow(){
+  const el=document.getElementById('cashflow-chart');
+  if(!cashflow.length){el.innerHTML='<p class="muted empty">Nessun dato nel periodo.</p>';return;}
+  const max=Math.max(...cashflow.flatMap(x=>[Number(x.income),Number(x.expenses)]),1);
+  el.innerHTML=cashflow.map(x=>`<div class="month-group"><div class="bars"><div class="bar income" style="height:${Math.max(3,Number(x.income)/max*150)}px" title="Entrate ${euro(x.income)}"></div><div class="bar expense" style="height:${Math.max(3,Number(x.expenses)/max*150)}px" title="Spese ${euro(x.expenses)}"></div></div><strong>${x.month}</strong><span class="${Number(x.net)<0?'negative':''}">${euro(x.net)}</span></div>`).join('');
+}
+function renderCategories(){
+  const el=document.getElementById('category-chart');
+  if(!categoryTotals.length){el.innerHTML='<p class="muted empty">Nessuna spesa nel periodo.</p>';return;}
+  const top=categoryTotals.slice(0,8), max=Math.max(...top.map(x=>Number(x.amount)),1);
+  el.innerHTML=top.map(x=>`<div class="cat-row"><div class="cat-meta"><span>${x.category}</span><strong>${euro(x.amount)}</strong></div><div class="progress"><i style="width:${Number(x.amount)/max*100}%"></i></div></div>`).join('');
+}
+renderCashflow(); renderCategories();
+
+async function saveCategory(id){
+  const category=document.querySelector(`.category-select[data-tx="${id}"]`).value;
+  const create_rule=document.querySelector(`.learn-rule[data-tx="${id}"]`).checked;
+  const r=await fetch(`/api/transactions/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({category,create_rule})});
+  if(r.ok){document.getElementById(`review-${id}`).remove(); const label=document.querySelector(`#tx-${id} .category-label`); if(label) label.textContent=category;} else alert('Impossibile salvare la correzione');
+}
+function openEdit(id,category,excluded){document.getElementById('edit-id').value=id;document.getElementById('edit-category').value=category;document.getElementById('edit-excluded').checked=excluded;document.getElementById('edit-create-rule').checked=false;document.getElementById('edit-note').value='';document.getElementById('edit-dialog').showModal();}
+
+document.getElementById('edit-form').addEventListener('submit',async e=>{e.preventDefault();const id=document.getElementById('edit-id').value;const body={category:document.getElementById('edit-category').value,create_rule:document.getElementById('edit-create-rule').checked,excluded_from_analytics:document.getElementById('edit-excluded').checked,manual_note:document.getElementById('edit-note').value};const r=await fetch(`/api/transactions/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(r.ok){location.reload()}else document.getElementById('edit-status').textContent='Errore durante il salvataggio.';});
+
+async function saveBudget(button, category){
+  const row=button.closest('tr');
+  const input=row.querySelector('.budget-input');
+  const amount=Number(input.value);
+  const status=document.getElementById('budget-status');
+  if(!Number.isFinite(amount)||amount<0){status.textContent='Inserisci un importo valido.';return;}
+  button.disabled=true;
+  const r=await fetch('/api/budgets',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({month:'{{ budget_month }}',category,amount})});
+  button.disabled=false;
+  if(r.ok){status.textContent=`Budget ${category} salvato localmente.`;setTimeout(()=>location.reload(),350)}
+  else {const d=await r.json();status.textContent=d.detail||'Impossibile salvare il budget.';}
+}
+function previousMonth(month){const [y,m]=month.split('-').map(Number);const d=new Date(y,m-2,1);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;}
+async function copyPreviousBudgets(){
+  const target='{{ budget_month }}', source=previousMonth(target), status=document.getElementById('budget-status');
+  const r=await fetch('/api/budgets/copy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source_month:source,target_month:target})});
+  const data=await r.json();
+  if(r.ok){status.textContent=`Copiati ${data.copied} budget da ${source}.`;setTimeout(()=>location.reload(),500)}else status.textContent=data.detail||'Copia non riuscita.';
+}
+
+document.getElementById('import-form').addEventListener('submit',async e=>{e.preventDefault();const status=document.getElementById('import-status');status.textContent='Importazione in corso…';const r=await fetch('/api/imports',{method:'POST',body:new FormData(e.target)});const data=await r.json();if(r.ok){if(data.review_url){status.textContent='Parsing completato. Apertura Human-check…';setTimeout(()=>location.href=data.review_url,450)}else{status.textContent=data.duplicate_file?'File già importato: nessun doppio conteggio.':`Importate ${data.imported} righe, saltate ${data.skipped}.`;setTimeout(()=>location.reload(),900)}}else status.textContent=data.detail||'Importazione non riuscita.';});
+
+document.getElementById('account-form').addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(e.target);const status=document.getElementById('account-status');const r=await fetch('/api/accounts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:f.get('name'),account_type:f.get('account_type'),currency:'EUR'})});if(r.ok){location.reload()}else {const d=await r.json();status.textContent=d.detail||'Creazione non riuscita.';}});
+
+function openRecurrence(key,merchant,category,cadence,amount,nextExpected,status,note){
+  const d=document.getElementById('recurrence-dialog'), f=document.getElementById('recurrence-form');
+  f.pattern_key.value=key; f.merchant.value=merchant; f.category.value=category;
+  f.status.value=status==='auto'?'confirmed':status; f.override_cadence.value='';
+  f.override_amount.value=amount; f.override_next_expected.value=nextExpected; f.note.value=note||'';
+  f.dataset.detectedCadence=cadence;
+  document.getElementById('recurrence-title').textContent=`${merchant} · ${category} · rilevata ${cadence}`;
+  document.getElementById('recurrence-status').textContent=''; d.showModal();
+}
+
+document.getElementById('recurrence-form').addEventListener('submit',async e=>{
+  e.preventDefault(); const f=e.currentTarget, status=document.getElementById('recurrence-status');
+  const payload={pattern_key:f.pattern_key.value,merchant:f.merchant.value,category:f.category.value,status:f.status.value,override_amount:f.override_amount.value?Number(f.override_amount.value):null,override_next_expected:f.override_next_expected.value||null,override_cadence:f.override_cadence.value||null,note:f.note.value||null};
+  const r=await fetch('/api/recurrences/override',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  const data=await r.json(); if(r.ok){status.textContent='Ricorrenza aggiornata. Il forecast userà questa decisione.';setTimeout(()=>location.reload(),450)}else status.textContent=data.detail||'Salvataggio non riuscito.';
+});
+
+async function resetRecurrence(){
+  const f=document.getElementById('recurrence-form'), status=document.getElementById('recurrence-status');
+  const r=await fetch('/api/recurrences/override?pattern_key='+encodeURIComponent(f.pattern_key.value),{method:'DELETE'});
+  if(r.ok){status.textContent='Controllo manuale rimosso.';setTimeout(()=>location.reload(),450)}else{const d=await r.json();status.textContent=d.detail||'Nessun controllo manuale da rimuovere.'}
+}
+</script>
+</body>
+</html>
