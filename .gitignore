@@ -16,6 +16,7 @@ data/inbox/*
 data/archive/*
 data/exports/*
 data/backups/*
+/fiscali/
 !data/inbox/.gitkeep
 !data/archive/.gitkeep
 !data/exports/.gitkeep
