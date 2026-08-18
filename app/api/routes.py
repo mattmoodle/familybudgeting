@@ -157,6 +157,11 @@ def create_category(payload: CategoryCreate, db: Session = Depends(get_db)):
     return category
 
 
+@router.get("/api/categories", response_model=list[CategoryRead])
+def list_categories(db: Session = Depends(get_db)):
+    return db.scalars(select(Category).order_by(Category.name)).all()
+
+
 @router.post("/api/imports", response_model=ImportResult)
 async def upload_statement(
     account_id: int = Form(...),
