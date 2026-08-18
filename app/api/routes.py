@@ -1,32 +1,42 @@
 from datetime import date
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.session import get_db
-from app.models.entities import Account, Category, HumanCheckDecision, HumanCheckItem, ImportBatch, RecurrenceOverride, Rule, Transaction
+from app.db.session import engine, get_db
+from app.models.entities import (
+    Account,
+    Category,
+    HumanCheckDecision,
+    HumanCheckItem,
+    ImportBatch,
+    RecurrenceOverride,
+    Rule,
+    Transaction,
+)
 from app.schemas.domain import (
     AccountCreate,
     AccountRead,
+    BudgetCopyRequest,
+    BudgetRead,
+    BudgetUpsert,
+    CostStructureRead,
     DashboardSummary,
+    ForecastItemRead,
     HumanCheckCorrection,
     HumanCheckDecisionPatch,
     HumanCheckItemRead,
     ImportResult,
     MonthlyCategoryStat,
-    SavingSuggestion,
-    RecurringPatternRead,
-    RecurrenceOverrideUpsert,
     RecurrenceOverrideRead,
-    ForecastItemRead,
-    CostStructureRead,
-    BudgetUpsert,
-    BudgetRead,
-    BudgetCopyRequest,
+    RecurrenceOverrideUpsert,
+    RecurringPatternRead,
+    SavingSuggestion,
     TransactionPatch,
     TransactionRead,
 )
@@ -38,11 +48,24 @@ from app.services.analytics import (
     review_queue,
     saving_suggestions,
 )
+from app.services.backup_export import (
+    create_backup,
+    export_csv,
+    export_xlsx,
+    restore_backup,
+    validate_backup,
+)
+from app.services.budgeting import budget_vs_actual, copy_budgets, delete_budget, upsert_budget
 from app.services.human_check import batch_progress, finalize_human_check
 from app.services.import_service import import_statement
 from app.services.normalization import normalize_description
-from app.services.recurrence import cost_structure, delete_recurrence_override, detect_recurring_patterns, forecast_recurring_expenses, upsert_recurrence_override
-from app.services.budgeting import budget_vs_actual, copy_budgets, delete_budget, upsert_budget
+from app.services.recurrence import (
+    cost_structure,
+    delete_recurrence_override,
+    detect_recurring_patterns,
+    forecast_recurring_expenses,
+    upsert_recurrence_override,
+)
 
 router = APIRouter()
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parents[1] / "templates"))
@@ -362,3 +385,52 @@ def cashflow(start: date | None = None, end: date | None = None, account_id: int
 @router.get("/api/analytics/category-totals")
 def categories_total(start: date | None = None, end: date | None = None, account_id: int | None = None, category: str | None = None, db: Session = Depends(get_db)):
     return category_totals(db, start, end, account_id, category)
+
+
+@router.post("/api/backup")
+def backup_database():
+    try:
+        path = create_backup()
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return {"filename": path.name, "path": str(path), "validated": True}
+
+
+@router.post("/api/backup/validate")
+async def validate_backup_upload(file: UploadFile = File(...)):
+    with NamedTemporaryFile(suffix=".db", delete=False) as temporary:
+        temporary.write(await file.read()); path = Path(temporary.name)
+    try:
+        return validate_backup(path)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    finally:
+        path.unlink(missing_ok=True)
+
+
+@router.post("/api/backup/restore")
+async def restore_backup_upload(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    with NamedTemporaryFile(suffix=".db", delete=False) as temporary:
+        temporary.write(await file.read()); path = Path(temporary.name)
+    try:
+        # Release this request's SQLite handle before an atomic Windows file replacement.
+        db.close()
+        engine.dispose()
+        safety_snapshot = restore_backup(path)
+        return {"restored": True, "safety_backup": safety_snapshot.name}
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    finally:
+        path.unlink(missing_ok=True)
+
+
+@router.get("/api/export/csv")
+def download_csv(db: Session = Depends(get_db)):
+    path = export_csv(db)
+    return FileResponse(path, filename=path.name, media_type="text/csv")
+
+
+@router.get("/api/export/xlsx")
+def download_xlsx(db: Session = Depends(get_db)):
+    path = export_xlsx(db)
+    return FileResponse(path, filename=path.name, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")

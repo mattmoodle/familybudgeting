@@ -24,5 +24,9 @@ class Settings(BaseSettings):
     def exports_dir(self) -> Path:
         return self.data_dir / "exports"
 
+    @property
+    def backups_dir(self) -> Path:
+        return self.data_dir / "backups"
+
 
 settings = Settings()

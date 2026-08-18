@@ -15,7 +15,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title=settings.app_name,
         description="Privacy-first offline family budgeting and transaction reconciliation platform.",
-        version="0.7.1",
+        version="0.8.0",
     )
     static_dir = Path(__file__).resolve().parent / "static"
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
@@ -26,6 +26,7 @@ def create_app() -> FastAPI:
         settings.inbox_dir.mkdir(parents=True, exist_ok=True)
         settings.archive_dir.mkdir(parents=True, exist_ok=True)
         settings.exports_dir.mkdir(parents=True, exist_ok=True)
+        settings.backups_dir.mkdir(parents=True, exist_ok=True)
         Base.metadata.create_all(bind=engine)
         ensure_schema_compatibility(engine)
         with SessionLocal() as db:

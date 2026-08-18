@@ -1,6 +1,6 @@
 # Family Budget Offline
 
-> Documentation release: **v0.7.1**. The application features remain those of v0.7; this release expands the installation and local-use guide.
+> Current release: **v0.8.0**. Includes the v0.7 recurrence controls plus local backup, restore validation and data export.
 
 A privacy-first, fully local family budgeting platform built as a portfolio-grade FastAPI project.
 
@@ -557,3 +557,16 @@ New endpoints:
 - `DELETE /api/recurrences/override?pattern_key=...`
 
 The dashboard provides a **Gestisci** action for every detected recurrence, including a reset command that removes the manual override and returns the pattern to automatic detection.
+
+## Local backup and export (v0.8)
+
+The application can create a validated SQLite snapshot in `data/backups/` using `POST /api/backup`. The snapshot is produced with SQLite's backup API and checked with `PRAGMA integrity_check` before success is returned.
+
+Use `POST /api/backup/validate` to verify that an uploaded SQLite backup is intact and contains the minimum Family Budget tables before trusting it. Exports remain local as well:
+
+- `GET /api/export/csv` downloads the transaction ledger as UTF-8 CSV;
+- `GET /api/export/xlsx` downloads a multi-sheet workbook containing transactions, accounts, categories, budgets, rules and recurrence overrides.
+
+Backup and export files are ignored by Git. They must be stored only in a trusted location because they may contain financial data.
+
+`POST /api/backup/restore` performs the same integrity and compatibility checks, creates a safety snapshot of the current ledger, then replaces the local database atomically. The dashboard exposes these actions under **Backup ed export locali**.

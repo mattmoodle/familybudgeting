@@ -1,6 +1,6 @@
 [project]
 name = "family-budget-offline"
-version = "0.7.1"
+version = "0.8.0"
 description = "Privacy-first, fully local family budgeting platform built with FastAPI, Pydantic, SQLAlchemy and SQLite."
 readme = "README.md"
 requires-python = ">=3.11"

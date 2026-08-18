@@ -251,6 +251,11 @@
         </tbody>
       </table></div>
     </section>
+    <section class="panel backup-panel">
+      <div class="panel-heading"><div><h2>Backup ed export locali</h2><p class="muted small">Snapshot SQLite verificati ed export scaricabili solo dal tuo computer.</p></div></div>
+      <div class="backup-actions"><button type="button" class="button secondary" onclick="createBackup()">Crea backup</button><a class="button secondary" href="/api/export/csv">Esporta CSV</a><a class="button secondary" href="/api/export/xlsx">Esporta XLSX</a></div>
+      <form id="restore-form" class="restore-form"><label>Ripristina da backup SQLite <input type="file" name="file" accept=".db,.sqlite,.sqlite3" required></label><button type="submit">Verifica e ripristina</button></form><p id="backup-status" class="muted small"></p>
+    </section>
   </main>
 
   <dialog id="recurrence-dialog">
@@ -367,6 +372,8 @@ async function resetRecurrence(){
   const r=await fetch('/api/recurrences/override?pattern_key='+encodeURIComponent(f.pattern_key.value),{method:'DELETE'});
   if(r.ok){status.textContent='Controllo manuale rimosso.';setTimeout(()=>location.reload(),450)}else{const d=await r.json();status.textContent=d.detail||'Nessun controllo manuale da rimuovere.'}
 }
+async function createBackup(){const status=document.getElementById('backup-status');status.textContent='Creazione snapshot locale…';const r=await fetch('/api/backup',{method:'POST'}),data=await r.json();status.textContent=r.ok?`Backup verificato: ${data.filename}`:(data.detail||'Backup non riuscito.');}
+document.getElementById('restore-form').addEventListener('submit',async e=>{e.preventDefault();if(!confirm('Il database corrente verrà sostituito. Verrà creato prima un backup di sicurezza. Continuare?'))return;const status=document.getElementById('backup-status');status.textContent='Verifica e ripristino in corso…';const r=await fetch('/api/backup/restore',{method:'POST',body:new FormData(e.currentTarget)}),data=await r.json();if(r.ok){status.textContent=`Ripristino completato. Backup di sicurezza: ${data.safety_backup}`;setTimeout(()=>location.reload(),500)}else status.textContent=data.detail||'Ripristino non riuscito.';});
 </script>
 </body>
 </html>
