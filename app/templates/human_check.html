@@ -12,7 +12,7 @@
     <div>
       <p class="eyebrow">HUMAN-CHECK · STAGING LOCALE</p>
       <h1>Controllo import</h1>
-      <p class="muted">{{ batch.source_filename }} · nessuna riga entra nelle analisi finché non completi la revisione.</p>
+      <p class="muted"><strong>Conto: {{ account.name if account else 'Non disponibile' }}</strong> · {{ batch.source_filename }} · nessuna riga entra nelle analisi finché non completi la revisione.</p>
     </div>
     <a class="button secondary" href="/">← Dashboard</a>
   </header>

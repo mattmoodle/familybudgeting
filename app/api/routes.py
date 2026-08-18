@@ -225,6 +225,7 @@ def human_check_page(batch_id: int, request: Request, db: Session = Depends(get_
     batch = db.get(ImportBatch, batch_id)
     if not batch or batch.import_mode != "human-check":
         raise HTTPException(404, "Human-check batch not found")
+    account = db.get(Account, batch.account_id)
     categories = db.scalars(select(Category).order_by(Category.name)).all()
     items = db.scalars(
         select(HumanCheckItem).where(HumanCheckItem.import_batch_id == batch_id).order_by(HumanCheckItem.sequence)
@@ -232,7 +233,7 @@ def human_check_page(batch_id: int, request: Request, db: Session = Depends(get_
     return templates.TemplateResponse(
         request=request,
         name="human_check.html",
-        context={"batch": batch, "items": items, "categories": categories, "progress": batch_progress(db, batch_id)},
+        context={"batch": batch, "account": account, "items": items, "categories": categories, "progress": batch_progress(db, batch_id)},
     )
 
 
