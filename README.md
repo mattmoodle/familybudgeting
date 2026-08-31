@@ -401,7 +401,7 @@ La home `http://127.0.0.1:8000/` è ora una dashboard operativa completamente lo
 Funzioni disponibili:
 
 - KPI di entrate, spese, cash flow netto e tasso di risparmio;
-- filtri globali opzionali per intervallo di date, conto e categoria: puoi lasciare vuota la data iniziale, la finale o entrambe;
+- filtri globali opzionali per intervallo di date, conto e categoria: puoi lasciare vuoti uno o tutti i campi;
 - grafico mensile entrate/spese/saldo realizzato con HTML/CSS/JavaScript locale;
 - riepilogo delle principali categorie di spesa;
 - creazione dei conti direttamente dalla UI;

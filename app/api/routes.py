@@ -82,18 +82,28 @@ def optional_date(value: str | None) -> date | None:
         raise HTTPException(422, "Date must use YYYY-MM-DD") from exc
 
 
+def optional_int(value: str | None, label: str) -> int | None:
+    if not value:
+        return None
+    try:
+        return int(value)
+    except ValueError as exc:
+        raise HTTPException(422, f"{label} must be an integer") from exc
+
+
 @router.get("/", response_class=HTMLResponse)
 def home(
     request: Request,
     start: str | None = None,
     end: str | None = None,
-    account_id: int | None = None,
+    account_id: str | None = None,
     category: str | None = None,
     budget_month: str | None = None,
     db: Session = Depends(get_db),
 ):
     start_date, end_date = optional_date(start), optional_date(end)
-    summary = dashboard_summary(db, start_date, end_date, account_id, category)
+    selected_account_id = optional_int(account_id, "account_id")
+    summary = dashboard_summary(db, start_date, end_date, selected_account_id, category)
     accounts = db.scalars(select(Account).where(Account.active.is_(True)).order_by(Account.name)).all()
     categories = db.scalars(select(Category).order_by(Category.name)).all()
     selected_budget_month = budget_month or date.today().strftime("%Y-%m")
@@ -108,8 +118,8 @@ def home(
         tx_stmt = tx_stmt.where(Transaction.booked_on >= start_date)
     if end_date:
         tx_stmt = tx_stmt.where(Transaction.booked_on <= end_date)
-    if account_id:
-        tx_stmt = tx_stmt.where(Transaction.account_id == account_id)
+    if selected_account_id:
+        tx_stmt = tx_stmt.where(Transaction.account_id == selected_account_id)
     if category:
         tx_stmt = tx_stmt.where(Transaction.category == category)
     recent = db.scalars(tx_stmt.order_by(Transaction.booked_on.desc(), Transaction.id.desc()).limit(100)).all()
@@ -123,13 +133,13 @@ def home(
             "categories": categories,
             "recent": recent,
             "review": review_queue(db),
-            "suggestions": saving_suggestions(db, start_date, end_date, account_id, category),
-            "category_totals": [{"category": x["category"], "amount": float(x["amount"])} for x in category_totals(db, start_date, end_date, account_id, category)],
-            "cashflow": [{"month": x["month"], "income": float(x["income"]), "expenses": float(x["expenses"]), "net": float(x["net"])} for x in monthly_cashflow(db, start_date, end_date, account_id, category)],
-            "filters": {"start": start_date, "end": end_date, "account_id": account_id, "category": category},
-            "recurring": detect_recurring_patterns(db, start_date, end_date, account_id, category),
-            "forecast": forecast_recurring_expenses(db, 60, start=start_date, end=end_date, account_id=account_id, category=category)[:12],
-            "cost_structure": cost_structure(db, start_date, end_date, account_id, category),
+            "suggestions": saving_suggestions(db, start_date, end_date, selected_account_id, category),
+            "category_totals": [{"category": x["category"], "amount": float(x["amount"])} for x in category_totals(db, start_date, end_date, selected_account_id, category)],
+            "cashflow": [{"month": x["month"], "income": float(x["income"]), "expenses": float(x["expenses"]), "net": float(x["net"])} for x in monthly_cashflow(db, start_date, end_date, selected_account_id, category)],
+            "filters": {"start": start_date, "end": end_date, "account_id": selected_account_id, "category": category},
+            "recurring": detect_recurring_patterns(db, start_date, end_date, selected_account_id, category),
+            "forecast": forecast_recurring_expenses(db, 60, start=start_date, end=end_date, account_id=selected_account_id, category=category)[:12],
+            "cost_structure": cost_structure(db, start_date, end_date, selected_account_id, category),
             "budget_report": budget_report,
             "budget_month": selected_budget_month,
         },
