@@ -212,7 +212,7 @@
       <div class="review-list">
         {% for tx in review %}
         <article class="review-row" id="review-{{ tx.id }}">
-          <div class="review-main"><span class="date">{{ tx.booked_on }}</span><strong>{{ tx.description }}</strong><span class="muted small">Confidenza {{ '%.0f'|format(tx.category_confidence * 100) }}%</span></div>
+          <div class="review-main"><span class="date">{{ tx.booked_on }}</span><strong>{{ tx.description }}</strong><span class="muted small">Conto: {{ tx.account.name }} · Confidenza {{ '%.0f'|format(tx.category_confidence * 100) }}%</span></div>
           <div class="amount {% if tx.amount < 0 %}negative{% endif %}">€{{ '%.2f'|format(tx.amount) }}</div>
           <div class="review-controls">
             <select class="category-select" data-tx="{{ tx.id }}">{% for c in categories %}<option value="{{ c.name }}" {% if tx.category == c.name %}selected{% endif %}>{{ c.name }}</option>{% endfor %}</select>

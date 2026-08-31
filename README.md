@@ -407,6 +407,7 @@ Funzioni disponibili:
 - creazione dei conti direttamente dalla UI;
 - importazione PDF/CSV/XLSX dalla dashboard con esito immediato;
 - coda **Da verificare** per transazioni non classificate o con confidenza < 75%;
+- indicazione del conto associato per ogni movimento nella coda **Da verificare**;
 - correzione inline della categoria e creazione opzionale di una regola automatica riutilizzabile;
 - creazione immediata di una nuova categoria dalla coda **Da verificare** o dalla correzione Human-check;
 - modifica di categoria, nota ed esclusione dalle analisi per qualsiasi transazione;
