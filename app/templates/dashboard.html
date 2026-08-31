@@ -215,6 +215,7 @@
           <div class="amount {% if tx.amount < 0 %}negative{% endif %}">€{{ '%.2f'|format(tx.amount) }}</div>
           <div class="review-controls">
             <select class="category-select" data-tx="{{ tx.id }}">{% for c in categories %}<option value="{{ c.name }}" {% if tx.category == c.name %}selected{% endif %}>{{ c.name }}</option>{% endfor %}</select>
+            <button type="button" class="icon-button" onclick="addReviewCategory({{ tx.id }})">+ Categoria</button>
             <label class="check"><input type="checkbox" class="learn-rule" data-tx="{{ tx.id }}" checked> ricorda regola</label>
             <button type="button" onclick="saveCategory({{ tx.id }})">Salva</button>
           </div>
@@ -321,6 +322,20 @@ async function saveCategory(id){
   const create_rule=document.querySelector(`.learn-rule[data-tx="${id}"]`).checked;
   const r=await fetch(`/api/transactions/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({category,create_rule})});
   if(r.ok){document.getElementById(`review-${id}`).remove(); const label=document.querySelector(`#tx-${id} .category-label`); if(label) label.textContent=category;} else alert('Impossibile salvare la correzione');
+}
+async function addReviewCategory(id){
+  const name=prompt('Nome della nuova categoria (es. Bank Fees):'); if(!name||!name.trim())return;
+  const r=await fetch('/api/categories',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name.trim()})});
+  if(r.ok){const category=await r.json();await refreshReviewCategories(category.name,id);}
+  else if(r.status===409){await refreshReviewCategories(name.trim(),id);}
+  else{const data=await r.json();alert(data.detail||'Impossibile creare la categoria.');}
+}
+async function refreshReviewCategories(selectedName,targetId){
+  const categories=await (await fetch('/api/categories')).json();
+  document.querySelectorAll('.category-select').forEach(select=>{
+    const current=select.dataset.tx===String(targetId)?selectedName:select.value;
+    select.replaceChildren(...categories.map(category=>new Option(category.name,category.name,false,category.name.toLowerCase()===current.toLowerCase())));
+  });
 }
 function openEdit(id,category,excluded){document.getElementById('edit-id').value=id;document.getElementById('edit-category').value=category;document.getElementById('edit-excluded').checked=excluded;document.getElementById('edit-create-rule').checked=false;document.getElementById('edit-note').value='';document.getElementById('edit-dialog').showModal();}
 

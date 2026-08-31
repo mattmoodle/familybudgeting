@@ -406,6 +406,7 @@ Funzioni disponibili:
 - importazione PDF/CSV/XLSX dalla dashboard con esito immediato;
 - coda **Da verificare** per transazioni non classificate o con confidenza < 75%;
 - correzione inline della categoria e creazione opzionale di una regola automatica riutilizzabile;
+- creazione immediata di una nuova categoria dalla coda **Da verificare** o dalla correzione Human-check;
 - modifica di categoria, nota ed esclusione dalle analisi per qualsiasi transazione;
 - indicatori visivi per duplicati, trasferimenti interni ed elementi esclusi;
 - suggerimenti di risparmio deterministici basati sui dati locali.
