@@ -563,6 +563,8 @@ New endpoints:
 
 The dashboard provides a **Gestisci** action for every detected recurrence, including a reset command that removes the manual override and returns the pattern to automatic detection.
 
+You can also add a **manual recurrence** without waiting for three historical transactions: set merchant, category, amount, cadence and next expected date. It is used immediately by the forecast and monthly budget projection.
+
 ## Local backup and export (v0.8)
 
 The application can create a validated SQLite snapshot in `data/backups/` using `POST /api/backup`. The snapshot is produced with SQLite's backup API and checked with `PRAGMA integrity_check` before success is returned.

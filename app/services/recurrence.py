@@ -133,8 +133,6 @@ def delete_recurrence_override(db: Session, pattern_key: str) -> bool:
 
 
 def _apply_overrides(db: Session, patterns: list[RecurringPattern], include_rejected: bool = False) -> list[RecurringPattern]:
-    if not patterns:
-        return []
     overrides = {o.pattern_key: o for o in db.scalars(select(RecurrenceOverride)).all()}
     result: list[RecurringPattern] = []
     for pattern in patterns:
@@ -155,7 +153,20 @@ def _apply_overrides(db: Session, patterns: list[RecurringPattern], include_reje
             last_seen=pattern.last_seen, next_expected=(override.override_next_expected or pattern.next_expected),
             management_status=override.status, manual_override=True, note=override.note,
         ))
-    return result
+    for override in overrides.values():
+        if not override.pattern_key.startswith("manual:") or (override.status == "rejected" and not include_rejected):
+            continue
+        if not override.override_amount or not override.override_next_expected or not override.override_cadence:
+            continue
+        result.append(RecurringPattern(
+            key=override.pattern_key, merchant=override.merchant, category=override.category,
+            cadence=override.override_cadence, interval_days=_canonical_days_for_cadence(override.override_cadence),
+            occurrences=0, average_amount=override.override_amount, amount_variation=ZERO,
+            cost_type="fixed", confidence=Decimal("1.000"), last_seen=override.override_next_expected,
+            next_expected=override.override_next_expected, management_status=override.status,
+            manual_override=True, note=override.note,
+        ))
+    return sorted(result, key=lambda item: (item.next_expected, -item.confidence))
 
 
 def detect_recurring_patterns(

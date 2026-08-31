@@ -179,8 +179,8 @@
 
     <section class="panel">
       <div class="panel-heading">
-        <div><h2>Ricorrenze e abbonamenti</h2><p class="muted small">Rilevati automaticamente da frequenza e stabilità degli importi. Nessun servizio esterno.</p></div>
-        <span class="count-badge">{{ recurring|length }}</span>
+        <div><h2>Ricorrenze e abbonamenti</h2><p class="muted small">Rilevati automaticamente o aggiunti manualmente. Nessun servizio esterno.</p></div>
+        <div class="header-actions"><button type="button" class="button secondary" onclick="openManualRecurrence()">+ Ricorrenza manuale</button><span class="count-badge">{{ recurring|length }}</span></div>
       </div>
       {% if recurring %}
       <div class="table-wrap">
@@ -276,6 +276,17 @@
       <label>Nota</label><textarea name="note" rows="2" placeholder="es. rata finale a dicembre"></textarea>
       <div class="dialog-actions"><button type="submit">Salva</button><button type="button" class="button secondary" onclick="resetRecurrence()">Ripristina automatico</button></div>
       <p id="recurrence-status" class="muted small" role="status"></p>
+    </form>
+  </dialog>
+
+  <dialog id="manual-recurrence-dialog">
+    <form id="manual-recurrence-form" class="dialog-form"><div class="dialog-title"><h2>Nuova ricorrenza manuale</h2><button type="button" class="close" onclick="this.closest('dialog').close()">×</button></div>
+      <label>Descrizione / merchant<input name="merchant" required maxlength="180" placeholder="es. Mutuo casa"></label>
+      <label>Categoria<select name="category" required>{% for c in categories %}<option value="{{ c.name }}">{{ c.name }}</option>{% endfor %}</select></label>
+      <label>Importo previsto (€)<input name="amount" type="number" min="0.01" step="0.01" required></label>
+      <label>Frequenza<select name="cadence" required><option value="weekly">Settimanale</option><option value="biweekly">Bisettimanale</option><option value="monthly" selected>Mensile</option><option value="bimonthly">Bimestrale</option><option value="quarterly">Trimestrale</option><option value="semiannual">Semestrale</option><option value="annual">Annuale</option></select></label>
+      <label>Prossima data prevista<input name="next_expected" type="date" required></label><label>Nota<textarea name="note" rows="2"></textarea></label>
+      <button type="submit">Aggiungi ricorrenza</button><p id="manual-recurrence-status" class="muted small"></p>
     </form>
   </dialog>
 
@@ -382,6 +393,8 @@ function openRecurrence(key,merchant,category,cadence,amount,nextExpected,status
   document.getElementById('recurrence-title').textContent=`${merchant} · ${category} · rilevata ${cadence}`;
   document.getElementById('recurrence-status').textContent=''; d.showModal();
 }
+function openManualRecurrence(){document.getElementById('manual-recurrence-form').reset();document.getElementById('manual-recurrence-dialog').showModal();}
+document.getElementById('manual-recurrence-form').addEventListener('submit',async e=>{e.preventDefault();const f=e.currentTarget,status=document.getElementById('manual-recurrence-status');const payload={pattern_key:`manual:${crypto.randomUUID()}`,merchant:f.merchant.value,category:f.category.value,status:'confirmed',override_amount:Number(f.amount.value),override_next_expected:f.next_expected.value,override_cadence:f.cadence.value,note:f.note.value||null};const r=await fetch('/api/recurrences/override',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});if(r.ok){status.textContent='Ricorrenza aggiunta.';setTimeout(()=>location.reload(),350)}else{const data=await r.json();status.textContent=data.detail||'Salvataggio non riuscito.';}});
 
 document.getElementById('recurrence-form').addEventListener('submit',async e=>{
   e.preventDefault(); const f=e.currentTarget, status=document.getElementById('recurrence-status');
