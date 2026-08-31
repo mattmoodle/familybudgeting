@@ -565,6 +565,8 @@ The dashboard provides a **Gestisci** action for every detected recurrence, incl
 
 You can also add a **manual recurrence** without waiting for three historical transactions: set merchant, category, amount, cadence and next expected date. It is used immediately by the forecast and monthly budget projection.
 
+During **Human-check**, each imported expense can also be marked **Ricorrente: Sì/No** before approving it. When set to **Sì**, choose its frequency; the same setting remains editable in the correction form if the row is marked **No**. At final import the app creates a local manual recurrence, immediately available to forecast and monthly-budget calculations.
+
 ## Local backup and export (v0.8)
 
 The application can create a validated SQLite snapshot in `data/backups/` using `POST /api/backup`. The snapshot is produced with SQLite's backup API and checked with `PRAGMA integrity_check` before success is returned.

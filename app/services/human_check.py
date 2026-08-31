@@ -11,6 +11,7 @@ from app.services.classification import classify
 from app.services.merchant import normalize_merchant
 from app.services.normalization import normalize_description, source_uid
 from app.services.reconciliation import reconcile_transaction
+from app.services.recurrence import advance_recurring_date, upsert_recurrence_override
 
 
 def batch_progress(db: Session, batch_id: int) -> dict[str, int]:
@@ -82,6 +83,13 @@ def finalize_human_check(db: Session, batch_id: int) -> tuple[int, int]:
         db.add(tx)
         db.flush()
         reconcile_transaction(db, tx)
+        if item.is_recurring and item.recurrence_cadence and amount < 0:
+            upsert_recurrence_override(
+                db, f"manual:human-check:{item.id}", merchant or description[:80], category, "confirmed",
+                override_amount=abs(Decimal(str(amount))),
+                override_next_expected=advance_recurring_date(booked_on, item.recurrence_cadence, {"weekly": 7, "biweekly": 14, "monthly": 30, "bimonthly": 60, "quarterly": 91, "semiannual": 182, "annual": 365}[item.recurrence_cadence]),
+                override_cadence=item.recurrence_cadence, note="Creata durante Human-check", commit=False,
+            )
         imported += 1
 
     batch.status = ImportStatus.COMPLETED.value

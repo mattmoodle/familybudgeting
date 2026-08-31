@@ -35,6 +35,13 @@ def ensure_schema_compatibility(engine: Engine) -> None:
             "CREATE INDEX IF NOT EXISTS ix_transactions_merchant ON transactions (merchant)"
         )
 
+    if "human_check_items" in tables:
+        columns = {c["name"] for c in inspector.get_columns("human_check_items")}
+        if "is_recurring" not in columns:
+            statements.append("ALTER TABLE human_check_items ADD COLUMN is_recurring BOOLEAN NOT NULL DEFAULT 0")
+        if "recurrence_cadence" not in columns:
+            statements.append("ALTER TABLE human_check_items ADD COLUMN recurrence_cadence VARCHAR(30)")
+
     if not statements:
         return
     with engine.begin() as conn:

@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.base import Base
-from app.models.entities import Account, HumanCheckDecision, HumanCheckItem, Transaction
+from app.models.entities import Account, HumanCheckDecision, HumanCheckItem, RecurrenceOverride, Transaction
 from app.services.human_check import finalize_human_check
 from app.services.import_service import import_statement
 
@@ -41,6 +41,8 @@ def test_human_check_stages_before_ledger_and_finalizes(tmp_path):
             assert items[1].parsed_category == "Restaurants"
 
             items[0].decision = HumanCheckDecision.ACCEPTED.value
+            items[0].is_recurring = True
+            items[0].recurrence_cadence = "monthly"
             items[1].decision = HumanCheckDecision.CORRECTED.value
             items[1].corrected_description = "Botton d'Oro restaurant"
             items[1].corrected_amount = Decimal("-30.00")
@@ -55,5 +57,9 @@ def test_human_check_stages_before_ledger_and_finalizes(tmp_path):
             assert txs[0].category_source == "human-approved"
             assert txs[1].category_source == "manual"
             assert txs[1].amount == Decimal("-30.00")
+            recurrence = db.scalar(select(RecurrenceOverride).where(RecurrenceOverride.pattern_key == f"manual:human-check:{items[0].id}"))
+            assert recurrence is not None
+            assert recurrence.override_cadence == "monthly"
+            assert recurrence.override_amount == Decimal("45.20")
     finally:
         settings.data_dir = old_data_dir

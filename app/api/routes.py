@@ -294,6 +294,8 @@ def human_check_decision(item_id: int, payload: HumanCheckDecisionPatch, db: Ses
     if payload.decision not in {HumanCheckDecision.ACCEPTED.value, HumanCheckDecision.REJECTED.value}:
         raise HTTPException(422, "Decision must be accepted or rejected")
     item.decision = payload.decision
+    item.is_recurring = payload.is_recurring
+    item.recurrence_cadence = payload.recurrence_cadence if payload.is_recurring else None
     db.commit()
     db.refresh(item)
     return item
@@ -309,6 +311,8 @@ def human_check_correction(item_id: int, payload: HumanCheckCorrection, db: Sess
     item.corrected_amount = payload.amount
     item.corrected_category = payload.category
     item.user_note = payload.note
+    item.is_recurring = payload.is_recurring
+    item.recurrence_cadence = payload.recurrence_cadence if payload.is_recurring else None
     item.decision = HumanCheckDecision.CORRECTED.value
     db.commit()
     db.refresh(item)

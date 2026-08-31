@@ -101,7 +101,7 @@ def _canonical_days_for_cadence(cadence: str) -> int:
 def upsert_recurrence_override(
     db: Session, pattern_key: str, merchant: str, category: str, status: str,
     override_amount: Decimal | None = None, override_next_expected: date | None = None,
-    override_cadence: str | None = None, note: str | None = None,
+    override_cadence: str | None = None, note: str | None = None, commit: bool = True,
 ) -> RecurrenceOverride:
     if status not in {"confirmed", "rejected", "paused", "ended"}:
         raise ValueError("invalid recurrence status")
@@ -118,8 +118,11 @@ def upsert_recurrence_override(
     row.override_next_expected = override_next_expected
     row.override_cadence = override_cadence
     row.note = note
-    db.commit()
-    db.refresh(row)
+    if commit:
+        db.commit()
+        db.refresh(row)
+    else:
+        db.flush()
     return row
 
 

@@ -46,6 +46,7 @@
         </div>
       </div>
       <p class="hc-question">La riga è stata riconosciuta correttamente?</p>
+      <label class="hc-recurring">Ricorrente <select id="recurring-flag"><option value="no">No</option><option value="yes">Sì</option></select><select id="recurring-cadence" disabled><option value="monthly">Mensile</option><option value="weekly">Settimanale</option><option value="biweekly">Bisettimanale</option><option value="bimonthly">Bimestrale</option><option value="quarterly">Trimestrale</option><option value="semiannual">Semestrale</option><option value="annual">Annuale</option></select></label>
       <div class="hc-actions">
         <button type="button" class="hc-no" onclick="decide('rejected')">✕ No</button>
         <button type="button" class="hc-yes" onclick="decide('accepted')">✓ Sì</button>
@@ -62,6 +63,7 @@
       <label>Descrizione<input type="text" id="correction-description" required></label>
       <label>Importo<input type="number" id="correction-amount" step="0.01" required></label>
       <label>Categoria<div class="category-picker"><select id="correction-category" required>{% for c in categories %}<option value="{{ c.name }}">{{ c.name }}</option>{% endfor %}</select><button type="button" class="button secondary" onclick="addCategory()">+ Categoria</button></div><small id="category-status" class="muted"></small></label>
+      <label>Ricorrente<select id="correction-recurring"><option value="no">No</option><option value="yes">Sì</option></select></label><label>Frequenza<select id="correction-cadence" disabled><option value="monthly">Mensile</option><option value="weekly">Settimanale</option><option value="biweekly">Bisettimanale</option><option value="bimonthly">Bimestrale</option><option value="quarterly">Trimestrale</option><option value="semiannual">Semestrale</option><option value="annual">Annuale</option></select></label>
       <label class="wide">Nota opzionale<textarea id="correction-note" rows="3" placeholder="Es. descrizione PDF troncata, importo con segno errato…"></textarea></label>
       <div class="wide hc-form-actions"><button type="submit">Salva correzione e continua →</button></div>
     </form>
@@ -122,13 +124,16 @@ function showReview(item){
   const amount=document.getElementById('parsed-amount'); amount.textContent=euro(item.parsed_amount); amount.className=Number(item.parsed_amount)<0?'negative':'positive';
   document.getElementById('parsed-category').textContent=item.parsed_category;
   document.getElementById('parsed-confidence').textContent=pct(item.parsed_confidence);
+  document.getElementById('recurring-flag').value=item.is_recurring?'yes':'no';
+  document.getElementById('recurring-cadence').disabled=!item.is_recurring;
+  document.getElementById('recurring-cadence').value=item.recurrence_cadence||'monthly';
 }
 async function decide(decision){
   if(!current)return;
   const card=document.getElementById('swipe-card');
   card.classList.add(decision==='accepted'?'swipe-right':'swipe-left');
   const id=current.id;
-  const r=await fetch(`/api/human-check/items/${id}/decision`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({decision})});
+  const recurring=document.getElementById('recurring-flag').value==='yes';const r=await fetch(`/api/human-check/items/${id}/decision`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({decision,is_recurring:recurring,recurrence_cadence:recurring?document.getElementById('recurring-cadence').value:null})});
   if(!r.ok){card.className='panel hc-card';alert('Impossibile salvare la decisione');return;}
   const updated=await r.json();
   items=items.map(x=>x.id===id?updated:x);
@@ -153,6 +158,7 @@ function showCorrection(){
   document.getElementById('correction-amount').value=Number(item.parsed_amount).toFixed(2);
   document.getElementById('correction-category').value=item.parsed_category;
   document.getElementById('correction-note').value='';
+  document.getElementById('correction-recurring').value=item.is_recurring?'yes':'no';document.getElementById('correction-cadence').disabled=!item.is_recurring;document.getElementById('correction-cadence').value=item.recurrence_cadence||'monthly';
 }
 async function addCategory(){
   const name=prompt('Nome della nuova categoria (es. Bills):'); if(!name||!name.trim())return;
@@ -168,7 +174,7 @@ async function refreshCategories(selectedName){
 }
 document.getElementById('correction-form').addEventListener('submit',async e=>{
   e.preventDefault(); if(!current)return;
-  const body={booked_on:document.getElementById('correction-date').value,description:document.getElementById('correction-description').value,amount:Number(document.getElementById('correction-amount').value),category:document.getElementById('correction-category').value,note:document.getElementById('correction-note').value||null};
+  const recurring=document.getElementById('correction-recurring').value==='yes';const body={booked_on:document.getElementById('correction-date').value,description:document.getElementById('correction-description').value,amount:Number(document.getElementById('correction-amount').value),category:document.getElementById('correction-category').value,note:document.getElementById('correction-note').value||null,is_recurring:recurring,recurrence_cadence:recurring?document.getElementById('correction-cadence').value:null};
   const r=await fetch(`/api/human-check/items/${current.id}/correction`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   if(!r.ok){alert('Impossibile salvare la correzione');return;}
   const updated=await r.json(); items=items.map(x=>x.id===updated.id?updated:x); updateProgress(); showCorrection();
@@ -188,6 +194,7 @@ async function finalizeBatch(){
   else{button.disabled=false;status.textContent=data.detail||'Finalizzazione non riuscita.';}
 }
 document.addEventListener('keydown',e=>{if(current&&pending.length){if(['ArrowLeft','n','N'].includes(e.key))decide('rejected');if(['ArrowRight','s','S','y','Y'].includes(e.key))decide('accepted');}});
+document.getElementById('recurring-flag').addEventListener('change',e=>document.getElementById('recurring-cadence').disabled=e.target.value!=='yes');document.getElementById('correction-recurring').addEventListener('change',e=>document.getElementById('correction-cadence').disabled=e.target.value!=='yes');
 const card=document.getElementById('swipe-card');
 card.addEventListener('touchstart',e=>{touchStartX=e.changedTouches[0].screenX},{passive:true});
 card.addEventListener('touchend',e=>{if(touchStartX===null)return;const dx=e.changedTouches[0].screenX-touchStartX;touchStartX=null;if(dx>70)decide('accepted');else if(dx<-70)decide('rejected')},{passive:true});

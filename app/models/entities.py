@@ -132,6 +132,8 @@ class HumanCheckItem(Base):
     parsed_category: Mapped[str] = mapped_column(String(80), default="Uncategorized")
     parsed_confidence: Mapped[Decimal] = mapped_column(Numeric(4, 3), default=Decimal("0"))
     parsed_merchant: Mapped[str] = mapped_column(String(180), default="")
+    is_recurring: Mapped[bool] = mapped_column(Boolean, default=False)
+    recurrence_cadence: Mapped[str | None] = mapped_column(String(30), nullable=True)
     decision: Mapped[str] = mapped_column(String(20), default=HumanCheckDecision.PENDING.value, index=True)
     corrected_booked_on: Mapped[date | None] = mapped_column(Date, nullable=True)
     corrected_description: Mapped[str | None] = mapped_column(Text, nullable=True)

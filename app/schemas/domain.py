@@ -60,6 +60,8 @@ class ImportResult(BaseModel):
 
 class HumanCheckDecisionPatch(BaseModel):
     decision: str
+    is_recurring: bool = False
+    recurrence_cadence: str | None = Field(default=None, pattern=r"^(weekly|biweekly|monthly|bimonthly|quarterly|semiannual|annual)$")
 
 
 class HumanCheckCorrection(BaseModel):
@@ -68,6 +70,8 @@ class HumanCheckCorrection(BaseModel):
     amount: Decimal
     category: str = Field(min_length=1)
     note: str | None = None
+    is_recurring: bool = False
+    recurrence_cadence: str | None = Field(default=None, pattern=r"^(weekly|biweekly|monthly|bimonthly|quarterly|semiannual|annual)$")
 
 
 class HumanCheckItemRead(BaseModel):
@@ -84,6 +88,8 @@ class HumanCheckItemRead(BaseModel):
     parsed_confidence: Decimal
     parsed_merchant: str
     decision: str
+    is_recurring: bool
+    recurrence_cadence: str | None
 
 
 class MonthlyCategoryStat(BaseModel):
