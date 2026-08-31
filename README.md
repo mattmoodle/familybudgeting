@@ -56,6 +56,8 @@ The service layer is deliberately independent from HTTP so import/reconciliation
 
 The server binds to `127.0.0.1` by default. Imported files are copied into `data/inbox`, processed locally, then moved to `data/archive`. SQLite is local. The UI uses no CDN resources.
 
+The desktop launcher runs Uvicorn with local reload enabled. The dashboard also provides **Riavvia app**, which applies code updates locally without exposing the service to the network.
+
 For a stricter machine-level guarantee, block outbound traffic for the Python executable with the host firewall. The application itself contains no outbound HTTP client.
 
 ## Start from zero (Windows, Linux and macOS)

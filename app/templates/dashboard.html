@@ -17,6 +17,7 @@
       <div class="header-actions">
         <button class="button secondary" type="button" onclick="document.getElementById('account-dialog').showModal()">+ Conto</button>
         <a class="button secondary" href="/docs">API</a>
+        <button class="button secondary" type="button" onclick="restartApp()">↻ Riavvia app</button>
       </div>
     </header>
 
@@ -316,6 +317,13 @@ function renderCategories(){
   el.innerHTML=top.map(x=>`<div class="cat-row"><div class="cat-meta"><span>${x.category}</span><strong>${euro(x.amount)}</strong></div><div class="progress"><i style="width:${Number(x.amount)/max*100}%"></i></div></div>`).join('');
 }
 renderCashflow(); renderCategories();
+
+async function restartApp(){
+  if(!confirm('Riavviare l’applicazione locale? La pagina verrà ricaricata tra pochi secondi.'))return;
+  const r=await fetch('/api/app/restart',{method:'POST'});
+  if(!r.ok){alert('Impossibile richiedere il riavvio.');return;}
+  setTimeout(()=>location.reload(),2200);
+}
 
 async function saveCategory(id){
   const category=document.querySelector(`.category-select[data-tx="${id}"]`).value;

@@ -141,6 +141,13 @@ def health() -> dict[str, str]:
     return {"status": "ok", "mode": "offline-local"}
 
 
+@router.post("/api/app/restart")
+def restart_app() -> dict[str, str]:
+    """Trigger Uvicorn's local reload watcher without changing source contents."""
+    (Path(__file__).resolve().parents[1] / "main.py").touch()
+    return {"status": "restarting"}
+
+
 @router.post("/api/accounts", response_model=AccountRead)
 def create_account(payload: AccountCreate, db: Session = Depends(get_db)):
     if db.scalar(select(Account).where(Account.name == payload.name)):
