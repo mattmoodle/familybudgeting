@@ -567,6 +567,8 @@ You can also add a **manual recurrence** without waiting for three historical tr
 
 During **Human-check**, each imported expense can also be marked **Ricorrente: Sì/No** before approving it. When set to **Sì**, choose its frequency; the same setting remains editable in the correction form if the row is marked **No**. At final import the app creates a local manual recurrence, immediately available to forecast and monthly-budget calculations.
 
+The **Modifica transazione** dialog offers the same **Spesa ricorrente** flag for an already recorded expense. Select a frequency to create or update its local manual recurrence; untick it and save to remove that manual recurrence again.
+
 ## Local backup and export (v0.8)
 
 The application can create a validated SQLite snapshot in `data/backups/` using `POST /api/backup`. The snapshot is produced with SQLite's backup API and checked with `PRAGMA integrity_check` before success is returned.

@@ -247,7 +247,8 @@
             <td>{{ tx.booked_on }}</td><td class="description-cell">{{ tx.description }}</td><td><span class="category-label">{{ tx.category }}</span></td>
             <td class="number {% if tx.amount < 0 %}negative{% else %}positive{% endif %}">€{{ '%.2f'|format(tx.amount) }}</td>
             <td>{% if tx.is_duplicate %}<span class="pill warn">duplicato</span>{% elif tx.is_internal_transfer %}<span class="pill neutral">trasferimento</span>{% elif tx.excluded_from_analytics %}<span class="pill neutral">escluso</span>{% else %}<span class="pill ok">conteggiato</span>{% endif %}</td>
-            <td><button class="icon-button" type="button" title="Modifica" onclick="openEdit({{ tx.id }}, '{{ tx.category|replace("'", "\\'") }}', {{ 'true' if tx.excluded_from_analytics else 'false' }})">Modifica</button></td>
+            {% set recurrence = transaction_recurrences.get(tx.id) %}
+            <td><button class="icon-button" type="button" title="Modifica" onclick="openEdit({{ tx.id }}, {{ tx.category|tojson }}, {{ 'true' if tx.excluded_from_analytics else 'false' }}, {{ (recurrence.override_cadence if recurrence and recurrence.status == 'confirmed' else none)|tojson }})">Modifica</button></td>
           </tr>
         {% endfor %}
         </tbody>
@@ -304,6 +305,8 @@
       <label>Categoria</label><select id="edit-category">{% for c in categories %}<option value="{{ c.name }}">{{ c.name }}</option>{% endfor %}</select>
       <label class="check"><input type="checkbox" id="edit-create-rule"> Applica automaticamente a movimenti simili futuri</label>
       <label class="check"><input type="checkbox" id="edit-excluded"> Escludi dalle analisi</label>
+      <label class="check"><input type="checkbox" id="edit-recurring"> Spesa ricorrente</label>
+      <label>Frequenza<select id="edit-recurrence-cadence" disabled><option value="weekly">Settimanale</option><option value="biweekly">Bisettimanale</option><option value="monthly" selected>Mensile</option><option value="bimonthly">Bimestrale</option><option value="quarterly">Trimestrale</option><option value="semiannual">Semestrale</option><option value="annual">Annuale</option></select></label>
       <label>Nota</label><textarea id="edit-note" rows="3" placeholder="Nota opzionale"></textarea>
       <button type="submit">Salva modifica</button><p id="edit-status" class="muted small"></p>
     </form>
@@ -356,9 +359,10 @@ async function refreshReviewCategories(selectedName,targetId){
     select.replaceChildren(...categories.map(category=>new Option(category.name,category.name,false,category.name.toLowerCase()===current.toLowerCase())));
   });
 }
-function openEdit(id,category,excluded){document.getElementById('edit-id').value=id;document.getElementById('edit-category').value=category;document.getElementById('edit-excluded').checked=excluded;document.getElementById('edit-create-rule').checked=false;document.getElementById('edit-note').value='';document.getElementById('edit-dialog').showModal();}
+function openEdit(id,category,excluded,recurrenceCadence){document.getElementById('edit-id').value=id;document.getElementById('edit-category').value=category;document.getElementById('edit-excluded').checked=excluded;document.getElementById('edit-create-rule').checked=false;document.getElementById('edit-recurring').checked=Boolean(recurrenceCadence);document.getElementById('edit-recurrence-cadence').disabled=!recurrenceCadence;document.getElementById('edit-recurrence-cadence').value=recurrenceCadence||'monthly';document.getElementById('edit-note').value='';document.getElementById('edit-dialog').showModal();}
 
-document.getElementById('edit-form').addEventListener('submit',async e=>{e.preventDefault();const id=document.getElementById('edit-id').value;const body={category:document.getElementById('edit-category').value,create_rule:document.getElementById('edit-create-rule').checked,excluded_from_analytics:document.getElementById('edit-excluded').checked,manual_note:document.getElementById('edit-note').value};const r=await fetch(`/api/transactions/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(r.ok){location.reload()}else document.getElementById('edit-status').textContent='Errore durante il salvataggio.';});
+document.getElementById('edit-recurring').addEventListener('change',e=>document.getElementById('edit-recurrence-cadence').disabled=!e.target.checked);
+document.getElementById('edit-form').addEventListener('submit',async e=>{e.preventDefault();const id=document.getElementById('edit-id').value,recurring=document.getElementById('edit-recurring').checked;const body={category:document.getElementById('edit-category').value,create_rule:document.getElementById('edit-create-rule').checked,excluded_from_analytics:document.getElementById('edit-excluded').checked,manual_note:document.getElementById('edit-note').value,is_recurring:recurring,recurrence_cadence:recurring?document.getElementById('edit-recurrence-cadence').value:null};const r=await fetch(`/api/transactions/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(r.ok){location.reload()}else{const data=await r.json();document.getElementById('edit-status').textContent=data.detail||'Errore durante il salvataggio.';}});
 
 async function saveBudget(button, category){
   const row=button.closest('tr');

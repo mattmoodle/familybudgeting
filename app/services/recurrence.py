@@ -126,12 +126,15 @@ def upsert_recurrence_override(
     return row
 
 
-def delete_recurrence_override(db: Session, pattern_key: str) -> bool:
+def delete_recurrence_override(db: Session, pattern_key: str, commit: bool = True) -> bool:
     row = db.scalar(select(RecurrenceOverride).where(RecurrenceOverride.pattern_key == pattern_key))
     if row is None:
         return False
     db.delete(row)
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
     return True
 
 

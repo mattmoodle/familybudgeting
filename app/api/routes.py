@@ -62,6 +62,7 @@ from app.services.human_check import batch_progress, finalize_human_check
 from app.services.import_service import import_statement
 from app.services.normalization import normalize_description
 from app.services.recurrence import (
+    advance_recurring_date,
     cost_structure,
     delete_recurrence_override,
     detect_recurring_patterns,
@@ -123,6 +124,11 @@ def home(
     if category:
         tx_stmt = tx_stmt.where(Transaction.category == category)
     recent = db.scalars(tx_stmt.order_by(Transaction.booked_on.desc(), Transaction.id.desc()).limit(100)).all()
+    transaction_recurrences: dict[int, RecurrenceOverride] = {}
+    for override in db.scalars(select(RecurrenceOverride).where(RecurrenceOverride.pattern_key.like("manual:transaction:%"))).all():
+        suffix = override.pattern_key.rsplit(":", 1)[-1]
+        if suffix.isdigit():
+            transaction_recurrences[int(suffix)] = override
 
     return templates.TemplateResponse(
         request=request,
@@ -132,6 +138,7 @@ def home(
             "accounts": accounts,
             "categories": categories,
             "recent": recent,
+            "transaction_recurrences": transaction_recurrences,
             "review": review_queue(db),
             "suggestions": saving_suggestions(db, start_date, end_date, selected_account_id, category),
             "category_totals": [{"category": x["category"], "amount": float(x["amount"])} for x in category_totals(db, start_date, end_date, selected_account_id, category)],
@@ -249,6 +256,24 @@ def patch_transaction(transaction_id: int, payload: TransactionPatch, db: Sessio
         tx.excluded_from_analytics = payload.excluded_from_analytics
     if payload.manual_note is not None:
         tx.manual_note = payload.manual_note
+    if payload.is_recurring is not None:
+        pattern_key = f"manual:transaction:{tx.id}"
+        if payload.is_recurring:
+            if tx.amount >= 0:
+                raise HTTPException(422, "Only expenses can be marked as recurring")
+            cadence = payload.recurrence_cadence or "monthly"
+            interval_days = {"weekly": 7, "biweekly": 14, "monthly": 30, "bimonthly": 60, "quarterly": 91, "semiannual": 182, "annual": 365}[cadence]
+            merchant = tx.merchant or normalize_description(tx.description)[:180] or tx.description[:180]
+            upsert_recurrence_override(
+                db, pattern_key, merchant, tx.category, "confirmed",
+                override_amount=abs(tx.amount),
+                override_next_expected=advance_recurring_date(tx.booked_on, cadence, interval_days),
+                override_cadence=cadence,
+                note="Impostata dalla modifica della transazione",
+                commit=False,
+            )
+        else:
+            delete_recurrence_override(db, pattern_key, commit=False)
     db.commit()
     db.refresh(tx)
     return tx

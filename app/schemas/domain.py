@@ -32,6 +32,8 @@ class TransactionPatch(BaseModel):
     excluded_from_analytics: bool | None = None
     manual_note: str | None = None
     create_rule: bool = False
+    is_recurring: bool | None = None
+    recurrence_cadence: str | None = Field(default=None, pattern=r"^(weekly|biweekly|monthly|bimonthly|quarterly|semiannual|annual)$")
 
 
 class TransactionRead(BaseModel):
