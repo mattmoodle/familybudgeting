@@ -151,6 +151,13 @@ def health() -> dict[str, str]:
     return {"status": "ok", "mode": "offline-local"}
 
 
+@router.get("/imports", response_class=HTMLResponse)
+def import_history(request: Request, db: Session = Depends(get_db)):
+    batches = db.scalars(select(ImportBatch).order_by(ImportBatch.created_at.desc(), ImportBatch.id.desc())).all()
+    accounts = {account.id: account.name for account in db.scalars(select(Account)).all()}
+    return templates.TemplateResponse(request=request, name="imports.html", context={"batches": batches, "accounts": accounts})
+
+
 @router.post("/api/app/restart")
 def restart_app() -> dict[str, str]:
     """Trigger Uvicorn's local reload watcher without changing source contents."""

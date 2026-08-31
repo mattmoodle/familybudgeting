@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Documenti importati · Family Budget</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<main class="container">
+  <header class="topbar">
+    <div><p class="eyebrow">ARCHIVIO LOCALE</p><h1>Documenti importati</h1><p class="muted">Elenco locale degli estratti caricati. I file restano in <code>data/archive</code>.</p></div>
+    <a class="button secondary" href="/">← Dashboard</a>
+  </header>
+  <section class="panel">
+    {% if batches %}
+    <div class="table-wrap"><table><thead><tr><th>Documento</th><th>Conto</th><th>Importato il</th><th>Modalità</th><th>Stato</th><th>Righe</th><th></th></tr></thead><tbody>
+    {% for batch in batches %}
+      <tr><td><strong>{{ batch.source_filename }}</strong></td><td>{{ accounts.get(batch.account_id, 'Non disponibile') }}</td><td>{{ batch.created_at.strftime('%d/%m/%Y %H:%M') }}</td><td>{{ 'Human-check' if batch.import_mode == 'human-check' else 'Standard' }}</td><td><span class="pill {% if batch.status == 'completed' %}ok{% elif batch.status == 'failed' %}warn{% else %}neutral{% endif %}">{{ batch.status }}</span></td><td>{{ batch.imported_rows }} importate · {{ batch.skipped_rows }} saltate</td><td>{% if batch.import_mode == 'human-check' and batch.status != 'completed' %}<a class="button secondary" href="/human-check/{{ batch.id }}">Apri revisione</a>{% endif %}</td></tr>
+    {% endfor %}
+    </tbody></table></div>
+    {% else %}<p class="muted empty">Non hai ancora importato documenti.</p>{% endif %}
+  </section>
+</main>
+</body>
+</html>

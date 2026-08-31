@@ -406,6 +406,7 @@ Funzioni disponibili:
 - riepilogo delle principali categorie di spesa;
 - creazione dei conti direttamente dalla UI;
 - importazione PDF/CSV/XLSX dalla dashboard con esito immediato;
+- pagina **Documenti importati** con file, conto, data/ora, modalità, stato e accesso alle revisioni Human-check aperte;
 - coda **Da verificare** per transazioni non classificate o con confidenza < 75%;
 - indicazione del conto associato per ogni movimento nella coda **Da verificare**;
 - correzione inline della categoria e creazione opzionale di una regola automatica riutilizzabile;
