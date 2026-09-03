@@ -10,6 +10,16 @@ from app.services.importers.pdf_utils import extract_pdf_text
 TX_START = re.compile(r"(?m)^\s*(?P<purchase>\d{2}/\d{2}/\d{4})\s+(?P<booked>\d{2}/\d{2}/\d{4})\s+(?P<rest>.+)$")
 AMOUNT_AT_END = re.compile(r"(?P<amount>-?[\d.]+,\d{2})\s*$")
 FOREIGN_AMOUNT = re.compile(r"\b[\d.]+(?:,\d+)?\s+(?:USD|JPY|GBP|CHF)\b", re.I)
+CURRENT_ROW = re.compile(
+    r"(?P<purchase>\d{2}/\d{2}/\d{4})\s+"
+    r"(?P<booked>\d{2}/\d{2}/\d{4})\s+"
+    r"(?P<body>.*?)\s+"
+    r"(?P<original>-?[\d.]+(?:,\d{2})?)\s+"
+    r"(?P<amount>-?[\d.]+(?:,\d{2})?)\s+"
+    r"(?P<commission>-?[\d.]+(?:,\d{2})?)\s+"
+    r"(?P<currency>[A-Z]{3})",
+    re.S,
+)
 
 
 class NumiaCardPdfImporter(StatementImporter):
@@ -23,12 +33,15 @@ class NumiaCardPdfImporter(StatementImporter):
     @staticmethod
     def matches(text: str) -> bool:
         upper = text.upper()
-        return "DATA ACQUISTO" in upper and "DATA REGISTR" in upper and ("NUMIA" in upper or "CARTA N." in upper)
+        return "LISTA MOVIMENTI" in upper and ("CREDIT MC" in upper or "NUMIA" in upper or "PLAFOND" in upper)
 
     def parse(self, path: Path) -> list[ImportedRow]:
         return self.parse_text(extract_pdf_text(path))
 
     def parse_text(self, text: str) -> list[ImportedRow]:
+        current_rows = self._parse_current_layout(text)
+        if current_rows:
+            return current_rows
         lines = text.splitlines()
         rows: list[ImportedRow] = []
         i = 0
@@ -73,4 +86,18 @@ class NumiaCardPdfImporter(StatementImporter):
             i = max(i + 1, j if j > i + 1 else i + 1)
         if not rows:
             raise ValueError("Numia/BCC card statement recognized, but no transactions were parsed")
+        return rows
+
+    @staticmethod
+    def _parse_current_layout(text: str) -> list[ImportedRow]:
+        rows: list[ImportedRow] = []
+        for match in CURRENT_ROW.finditer(text):
+            purchase = parse_date(match.group("purchase"))
+            booked = parse_date(match.group("booked"))
+            amount = parse_amount(match.group("amount"))
+            if not purchase or not booked or amount is None:
+                continue
+            description = re.sub(r"\s+", " ", match.group("body")).strip()
+            if description and not description.upper().startswith(("IMPORTO", "TOTALE")):
+                rows.append(ImportedRow(booked, description, amount, value_on=purchase, raw_data=match.group(0)))
         return rows

@@ -387,10 +387,10 @@ This is designed for single-user localhost use. Do not bind it to `0.0.0.0` or e
 The PDF registry auto-detects supported statements before falling back to the generic parser:
 
 - **BCC Roma / Movimenti Globali** — signed bank-account movements, including PayPal SDDs and Satispay funding.
-- **Numia / Carta BCC** — purchase date + posting date statements; card-statement signs are converted to the application's accounting convention (`expense < 0`, `income/refund > 0`). Multiline FX rows are supported.
-- **BPER** — monthly statements with explicit `D/A` sign columns, plus a conservative parser for older layouts when the transaction direction can be inferred without guessing.
+- **Numia / Carta BCC** — purchase date + posting date statements, including the current table-based Credit MC layout and multiline FX rows. Values are retained in the application's accounting convention (`expense < 0`, `income/refund > 0`).
+- **BPER** — monthly statements with explicit `D/A` sign columns and the current Relax Banking `Contabilizzato` table layout, preserving the signed amount printed by the bank.
 - **PayPal** — transaction history grouped by currency; PayPal transaction IDs are retained in the description/raw audit data.
-- **Satispay** — transaction list with Italian month names and Satispay UUIDs; bank funding and savings/investment-pocket movements are treated as internal transfers.
+- **Satispay** — transaction lists with Italian month names and Satispay UUIDs, including PDF exports where the euro glyph is encoded as a replacement character; bank funding and savings/investment-pocket movements are treated as internal transfers.
 
 ### Safety-first parsing
 

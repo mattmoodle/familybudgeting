@@ -9,9 +9,14 @@ from app.services.importers.common import parse_amount
 from app.services.importers.pdf_utils import extract_pdf_text
 
 MONTHS = {"gen":1,"feb":2,"mar":3,"apr":4,"mag":5,"giu":6,"lug":7,"ago":8,"set":9,"ott":10,"nov":11,"dic":12}
-DATE_RE = re.compile(r"^\s*(\d{1,2})\s+(gen|feb|mar|apr|mag|giu|lug|ago|set|ott|nov|dic)\s+(\d{4})\s*$", re.I)
+DATE_RE = re.compile(
+    r"^\s*(\d{1,2})\s+(gen|feb|mar|apr|mag|giu|lug|ago|set|ott|nov|dic)\s+(\d{4})(?:\s+(?P<rest>.*))?$",
+    re.I,
+)
 UUID_RE = re.compile(r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b", re.I)
-AMOUNT_RE = re.compile(r"(?<![\d.,])-?[\d.]+,\d{2}\s*€")
+# Some PDF producers expose the euro glyph as one or more replacement characters.
+# Accept it (or the normal glyph) while still requiring a money-shaped value.
+AMOUNT_RE = re.compile(r"(?<![\d.,])-?[\d.]+,\d{2}\s*(?:€|\ufffd)+")
 
 
 class SatispayPdfImporter(StatementImporter):
@@ -33,15 +38,12 @@ class SatispayPdfImporter(StatementImporter):
                 i += 1
                 continue
             booked = datetime(int(dm.group(3)), MONTHS[dm.group(2).lower()], int(dm.group(1))).date()
-            block: list[str] = []
+            block: list[str] = [dm.group("rest") or ""]
             j = i + 1
             while j < len(lines) and not DATE_RE.match(lines[j]):
                 if lines[j].lower().startswith("pagina "):
                     break
                 block.append(lines[j])
-                if UUID_RE.search(lines[j]):
-                    j += 1
-                    break
                 j += 1
             combined = " ".join(x for x in block if x)
             uuid_m = UUID_RE.search(combined)

@@ -17,6 +17,16 @@ OLD_ROW = re.compile(
     r"^\s*(?P<booked>\d{1,2}/\d{2}/\d{2})\s+(?P<value>\d{1,2}/\d{2}/\d{2})\s+(?P<amount>[\d.]+,\d{2})\s+(?P<body>.+)$",
     re.I,
 )
+# Relax Banking's current "Movimenti" PDF puts the signed amount at the end of
+# each wrapped row, immediately before the accounting-state label.
+CURRENT_ROW = re.compile(
+    r"(?P<booked>\d{2}/\d{2}/\d{4})\s+"
+    r"(?P<value>\d{2}/\d{2}/\d{4})\s+"
+    r"(?P<body>.*?)\s+"
+    r"(?P<amount>-?[\d.]+,\d{2})\s*[€�]\s+Contabilizzato"
+    r"(?P<tail>.*?)(?=\s+\d{2}/\d{2}/\d{4}\s+\d{2}/\d{2}/\d{4}\s+|\Z)",
+    re.I | re.S,
+)
 
 
 def _match(line: str):
@@ -26,13 +36,16 @@ def _match(line: str):
 class BperPdfImporter(StatementImporter):
     @staticmethod
     def matches(text: str) -> bool:
-        upper = text.upper()
-        return "BPMOIT22" in upper or ("RATA PRESTITO" in upper and "05387" in upper)
+        compact = re.sub(r"\s+", "", text.upper())
+        return "BPMOIT22" in compact or ("CONTOCORRENTE:" in compact and "CONTABILIZZATO" in compact)
 
     def parse(self, path: Path) -> list[ImportedRow]:
         return self.parse_text(extract_pdf_text(path))
 
     def parse_text(self, text: str) -> list[ImportedRow]:
+        current_rows = self._parse_current_layout(text)
+        if current_rows:
+            return current_rows
         lines = text.splitlines()
         rows: list[ImportedRow] = []
         i = 0
@@ -78,4 +91,20 @@ class BperPdfImporter(StatementImporter):
             i = max(i + 1, j)
         if not rows:
             raise ValueError("BPER statement recognized, but no unambiguous transaction rows were parsed")
+        return rows
+
+    @staticmethod
+    def _parse_current_layout(text: str) -> list[ImportedRow]:
+        normalized = re.sub(r"\s+", " ", text)
+        rows: list[ImportedRow] = []
+        for match in CURRENT_ROW.finditer(normalized):
+            booked = parse_date(match.group("booked"))
+            value = parse_date(match.group("value"))
+            amount = parse_amount(match.group("amount"))
+            if not booked or amount is None:
+                continue
+            body = re.sub(r"\s+", " ", match.group("body")).strip()
+            tail = re.sub(r"\s+", " ", match.group("tail")).strip()
+            description = f"{body} {tail}".strip()
+            rows.append(ImportedRow(booked, description, amount, value_on=value, raw_data=match.group(0)))
         return rows
