@@ -4,7 +4,7 @@ import json
 import shutil
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -122,3 +122,51 @@ def import_statement(
     except Exception:
         db.rollback()
         raise
+
+
+def delete_import_batch(db: Session, batch_id: int) -> tuple[int, int]:
+    """Remove one local import, its ledger/staging rows and its archived source file.
+
+    Global learning rules, categories and recurrence preferences are intentionally
+    retained: they can be shared with transactions from other imports.
+    """
+    batch = db.get(ImportBatch, batch_id)
+    if not batch:
+        raise ValueError("Import not found")
+
+    stored_path = Path(batch.stored_path).resolve()
+    allowed_roots = (settings.archive_dir.resolve(), settings.inbox_dir.resolve())
+    if stored_path.exists() and not any(stored_path.is_relative_to(root) for root in allowed_roots):
+        raise ValueError("Refusing to delete a file outside the local import folders")
+
+    transaction_ids = list(
+        db.scalars(select(Transaction.id).where(Transaction.import_batch_id == batch.id)).all()
+    )
+    transaction_count = len(transaction_ids)
+    item_count = db.scalar(
+        select(func.count()).select_from(HumanCheckItem).where(HumanCheckItem.import_batch_id == batch.id)
+    ) or 0
+    if transaction_ids:
+        # Preserve referential integrity for transactions belonging to other batches.
+        db.execute(
+            update(Transaction)
+            .where(Transaction.duplicate_of_id.in_(transaction_ids))
+            .values(duplicate_of_id=None, is_duplicate=False)
+        )
+        db.execute(
+            update(Transaction)
+            .where(Transaction.transfer_pair_id.in_(transaction_ids))
+            .values(transfer_pair_id=None, is_internal_transfer=False)
+        )
+    try:
+        db.execute(delete(HumanCheckItem).where(HumanCheckItem.import_batch_id == batch.id))
+        db.execute(delete(Transaction).where(Transaction.import_batch_id == batch.id))
+        db.delete(batch)
+        db.flush()
+        if stored_path.exists():
+            stored_path.unlink()
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    return transaction_count, item_count

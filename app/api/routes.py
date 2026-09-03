@@ -60,7 +60,7 @@ from app.services.backup_export import (
 )
 from app.services.budgeting import budget_vs_actual, copy_budgets, delete_budget, upsert_budget
 from app.services.human_check import batch_progress, finalize_human_check
-from app.services.import_service import import_statement
+from app.services.import_service import delete_import_batch, import_statement
 from app.services.normalization import normalize_description
 from app.services.recurrence import (
     advance_recurring_date,
@@ -234,6 +234,15 @@ async def upload_statement(
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
     return ImportResult(batch_id=batch.id, imported=imported, skipped=skipped, duplicate_file=duplicate_file, import_mode=batch.import_mode, review_url=f"/human-check/{batch.id}" if batch.import_mode == "human-check" and batch.status != "completed" else None)
+
+
+@router.delete("/api/imports/{batch_id}")
+def delete_import(batch_id: int, db: Session = Depends(get_db)):
+    try:
+        transactions, staging_items = delete_import_batch(db, batch_id)
+    except ValueError as exc:
+        raise HTTPException(404 if str(exc) == "Import not found" else 422, str(exc)) from exc
+    return {"batch_id": batch_id, "deleted_transactions": transactions, "deleted_staging_items": staging_items}
 
 
 @router.get("/api/transactions", response_model=list[TransactionRead])

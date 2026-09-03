@@ -7,9 +7,9 @@ from sqlalchemy.orm import Session
 from app.api.routes import human_check_decision
 from app.core.config import settings
 from app.db.base import Base
-from app.models.entities import Account, HumanCheckDecision, HumanCheckItem, RecurrenceOverride, Transaction
+from app.models.entities import Account, HumanCheckDecision, HumanCheckItem, ImportBatch, RecurrenceOverride, Transaction
 from app.services.human_check import finalize_human_check
-from app.services.import_service import import_statement
+from app.services.import_service import delete_import_batch, import_statement
 from app.schemas.domain import HumanCheckDecisionPatch
 from app.services.classification import classify
 
@@ -100,5 +100,43 @@ def test_human_check_accepts_direct_manual_edit_and_learns_category(tmp_path):
             learned = classify("Carta POS Caffe Aurora Roma 654321", db)
             assert learned.category == "Restaurants"
             assert learned.source == "learned-local"
+    finally:
+        settings.data_dir = old_data_dir
+
+
+def test_delete_import_batch_removes_file_staging_and_completed_transactions(tmp_path):
+    old_data_dir = settings.data_dir
+    settings.data_dir = tmp_path / "data"
+    try:
+        engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(engine)
+        with Session(engine) as db:
+            account = Account(name="Deletion Test", account_type="bank")
+            db.add(account)
+            db.commit()
+            account_id = account.id
+            batch, _, _, _ = import_statement(
+                db, account_id, "statement.csv", b"Data;Descrizione;Importo\n01/08/2026;EXAMPLE SHOP;-8,50\n", mode="human-check"
+            )
+            from pathlib import Path
+            archive_path = Path(batch.stored_path)
+            assert archive_path.exists()
+            item = db.scalar(select(HumanCheckItem))
+            item.decision = HumanCheckDecision.ACCEPTED.value
+            db.commit()
+            finalize_human_check(db, batch.id)
+
+            deleted_transactions, deleted_items = delete_import_batch(db, batch.id)
+            assert (deleted_transactions, deleted_items) == (1, 1)
+            assert db.get(ImportBatch, batch.id) is None
+            assert db.scalars(select(Transaction)).all() == []
+            assert db.scalars(select(HumanCheckItem)).all() == []
+            assert not archive_path.exists()
+            db.expunge(item)
+
+            fresh, _, _, duplicate = import_statement(
+                db, account_id, "statement.csv", b"Data;Descrizione;Importo\n01/08/2026;EXAMPLE SHOP;-8,50\n", mode="human-check"
+            )
+            assert duplicate is False
     finally:
         settings.data_dir = old_data_dir
