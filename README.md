@@ -567,6 +567,8 @@ You can also add a **manual recurrence** without waiting for three historical tr
 
 During **Human-check**, each imported expense can also be marked **Ricorrente: Sì/No** before approving it. When set to **Sì**, choose its frequency; the same setting remains editable in the correction form if the row is marked **No**. At final import the app creates a local manual recurrence, immediately available to forecast and monthly-budget calculations.
 
+The first Human-check step also allows direct edits to date, description, amount and category, plus recurring and suspicious flags. Pressing **Sì** after changing a detail stores it as a manual correction without sending the row to the later correction screen. The local classifier then learns the manually chosen category from the corrected merchant/description; amounts and dates are saved exactly as entered but are not predicted by the classifier.
+
 The **Modifica transazione** dialog offers the same **Spesa ricorrente** flag for an already recorded expense. Select a frequency to create or update its local manual recurrence; untick it and save to remove that manual recurrence again.
 
 In Human-check corrections, **Segnala come spesa sospetta** adds the movement to the dashboard’s local suspicious-expenses queue. Suspicious movements are always included in totals, analytics and budget calculations; accepting one only clears the review flag.

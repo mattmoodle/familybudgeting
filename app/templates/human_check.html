@@ -45,8 +45,16 @@
           </dl>
         </div>
       </div>
+      <div class="hc-quick-edit">
+        <p class="muted small"><strong>Modifica direttamente prima di confermare.</strong> Se cambi un dettaglio e premi Sì, la correzione verrà usata anche per migliorare il riconoscimento locale.</p>
+        <label>Data<input type="date" id="review-date" required></label>
+        <label>Descrizione<input type="text" id="review-description" required></label>
+        <label>Importo<input type="number" id="review-amount" step="0.01" required></label>
+        <label>Categoria<div class="category-picker"><select id="review-category" required>{% for c in categories %}<option value="{{ c.name }}">{{ c.name }}</option>{% endfor %}</select><button type="button" class="button secondary" onclick="addCategory('review')">+ Categoria</button></div></label>
+      </div>
       <p class="hc-question">La riga è stata riconosciuta correttamente?</p>
       <label class="hc-recurring">Ricorrente <select id="recurring-flag"><option value="no">No</option><option value="yes">Sì</option></select><select id="recurring-cadence" disabled><option value="monthly">Mensile</option><option value="weekly">Settimanale</option><option value="biweekly">Bisettimanale</option><option value="bimonthly">Bimestrale</option><option value="quarterly">Trimestrale</option><option value="semiannual">Semestrale</option><option value="annual">Annuale</option></select></label>
+      <label class="hc-recurring check"><input type="checkbox" id="review-suspicious"> Segnala come spesa sospetta</label>
       <div class="hc-actions">
         <button type="button" class="hc-no" onclick="decide('rejected')">✕ No</button>
         <button type="button" class="hc-yes" onclick="decide('accepted')">✓ Sì</button>
@@ -125,16 +133,24 @@ function showReview(item){
   const amount=document.getElementById('parsed-amount'); amount.textContent=euro(item.parsed_amount); amount.className=Number(item.parsed_amount)<0?'negative':'positive';
   document.getElementById('parsed-category').textContent=item.parsed_category;
   document.getElementById('parsed-confidence').textContent=pct(item.parsed_confidence);
+  document.getElementById('review-date').value=item.parsed_booked_on;
+  document.getElementById('review-description').value=item.parsed_description;
+  document.getElementById('review-amount').value=Number(item.parsed_amount).toFixed(2);
+  document.getElementById('review-category').value=item.parsed_category;
   document.getElementById('recurring-flag').value=item.is_recurring?'yes':'no';
   document.getElementById('recurring-cadence').disabled=!item.is_recurring;
   document.getElementById('recurring-cadence').value=item.recurrence_cadence||'monthly';
+  document.getElementById('review-suspicious').checked=item.is_suspicious;
 }
 async function decide(decision){
   if(!current)return;
   const card=document.getElementById('swipe-card');
   card.classList.add(decision==='accepted'?'swipe-right':'swipe-left');
   const id=current.id;
-  const recurring=document.getElementById('recurring-flag').value==='yes';const r=await fetch(`/api/human-check/items/${id}/decision`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({decision,is_recurring:recurring,recurrence_cadence:recurring?document.getElementById('recurring-cadence').value:null})});
+  const recurring=document.getElementById('recurring-flag').value==='yes',booked_on=document.getElementById('review-date').value,description=document.getElementById('review-description').value.trim(),amount=Number(document.getElementById('review-amount').value),category=document.getElementById('review-category').value;
+  const edited=booked_on!==current.parsed_booked_on||description!==current.parsed_description||amount!==Number(current.parsed_amount)||category!==current.parsed_category;
+  const body={decision,apply_manual_correction:decision==='accepted'&&edited,booked_on,description,amount,category,is_recurring:recurring,recurrence_cadence:recurring?document.getElementById('recurring-cadence').value:null,is_suspicious:document.getElementById('review-suspicious').checked};
+  const r=await fetch(`/api/human-check/items/${id}/decision`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   if(!r.ok){card.className='panel hc-card';alert('Impossibile salvare la decisione');return;}
   const updated=await r.json();
   items=items.map(x=>x.id===id?updated:x);
@@ -162,17 +178,20 @@ function showCorrection(){
   document.getElementById('correction-recurring').value=item.is_recurring?'yes':'no';document.getElementById('correction-cadence').disabled=!item.is_recurring;document.getElementById('correction-cadence').value=item.recurrence_cadence||'monthly';
   document.getElementById('correction-suspicious').checked=item.is_suspicious;
 }
-async function addCategory(){
+async function addCategory(target='correction'){
   const name=prompt('Nome della nuova categoria (es. Bills):'); if(!name||!name.trim())return;
-  const status=document.getElementById('category-status'), select=document.getElementById('correction-category');
+  const status=document.getElementById('category-status');
   const r=await fetch('/api/categories',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name.trim()})});
-  if(r.ok){const category=await r.json();await refreshCategories(category.name);status.textContent=`Categoria “${category.name}” creata localmente.`;}
-  else if(r.status===409){await refreshCategories(name.trim());status.textContent='Categoria già esistente: selezionata.';}
+  if(r.ok){const category=await r.json();await refreshCategories(category.name,target);status.textContent=`Categoria “${category.name}” creata localmente.`;}
+  else if(r.status===409){await refreshCategories(name.trim(),target);status.textContent='Categoria già esistente: selezionata.';}
   else {const data=await r.json();status.textContent=data.detail||'Impossibile creare la categoria.';}
 }
-async function refreshCategories(selectedName){
-  const select=document.getElementById('correction-category'),categories=await (await fetch('/api/categories')).json();
-  select.replaceChildren(...categories.map(category=>new Option(category.name,category.name, false, category.name.toLowerCase()===selectedName.toLowerCase())));
+async function refreshCategories(selectedName,target){
+  const categories=await (await fetch('/api/categories')).json();
+  for(const select of [document.getElementById('correction-category'),document.getElementById('review-category')]){
+    const chosen=select.id===`${target}-category`?selectedName:select.value;
+    select.replaceChildren(...categories.map(category=>new Option(category.name,category.name, false, category.name.toLowerCase()===chosen.toLowerCase())));
+  }
 }
 document.getElementById('correction-form').addEventListener('submit',async e=>{
   e.preventDefault(); if(!current)return;

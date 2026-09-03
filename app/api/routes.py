@@ -322,7 +322,16 @@ def human_check_decision(item_id: int, payload: HumanCheckDecisionPatch, db: Ses
         raise HTTPException(404, "Human-check item not found")
     if payload.decision not in {HumanCheckDecision.ACCEPTED.value, HumanCheckDecision.REJECTED.value}:
         raise HTTPException(422, "Decision must be accepted or rejected")
-    item.decision = payload.decision
+    if payload.apply_manual_correction:
+        if not all((payload.booked_on, payload.description, payload.amount is not None, payload.category)):
+            raise HTTPException(422, "Manual confirmation requires date, description, amount and category")
+        item.corrected_booked_on = payload.booked_on
+        item.corrected_description = payload.description
+        item.corrected_amount = payload.amount
+        item.corrected_category = payload.category
+        item.decision = HumanCheckDecision.CORRECTED.value
+    else:
+        item.decision = payload.decision
     item.is_recurring = payload.is_recurring
     item.recurrence_cadence = payload.recurrence_cadence if payload.is_recurring else None
     item.is_suspicious = payload.is_suspicious

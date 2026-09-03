@@ -64,6 +64,11 @@ class ImportResult(BaseModel):
 
 class HumanCheckDecisionPatch(BaseModel):
     decision: str
+    apply_manual_correction: bool = False
+    booked_on: date | None = None
+    description: str | None = Field(default=None, min_length=1)
+    amount: Decimal | None = None
+    category: str | None = Field(default=None, min_length=1)
     is_recurring: bool = False
     recurrence_cadence: str | None = Field(default=None, pattern=r"^(weekly|biweekly|monthly|bimonthly|quarterly|semiannual|annual)$")
     is_suspicious: bool = False
