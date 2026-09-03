@@ -2,6 +2,10 @@
 
 > Current release: **v0.8.0**. Includes the v0.7 recurrence controls plus local backup, restore validation and data export.
 
+## Navigation
+
+The interface is organized into dedicated pages accessible from the top menu: **Panoramica**, **Budget**, **Transazioni**, **Da verificare**, **Ricorrenze**, **Analisi**, and **Documenti**. This keeps focused workflows separate while preserving the same local SQLite data and offline operation.
+
 A privacy-first, fully local family budgeting platform built as a portfolio-grade FastAPI project.
 
 ## Why this project is different

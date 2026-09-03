@@ -21,23 +21,36 @@
       </div>
     </header>
 
+    <nav class="main-nav" aria-label="Navigazione principale">
+      <a href="/" class="{% if active_page == 'overview' %}active{% endif %}">Panoramica</a>
+      <a href="/budget" class="{% if active_page == 'budget' %}active{% endif %}">Budget</a>
+      <a href="/transactions" class="{% if active_page == 'transactions' %}active{% endif %}">Transazioni</a>
+      <a href="/review" class="{% if active_page == 'review' %}active{% endif %}">Da verificare{% if review or suspicious %} <span>{{ review|length + suspicious|length }}</span>{% endif %}</a>
+      <a href="/recurrences" class="{% if active_page == 'recurrences' %}active{% endif %}">Ricorrenze</a>
+      <a href="/insights" class="{% if active_page == 'insights' %}active{% endif %}">Analisi</a>
+      <a href="/imports" class="{% if active_page == 'imports' %}active{% endif %}">Documenti</a>
+    </nav>
+
     <section class="panel filters-panel">
       <form method="get" class="filters">
         <div><label>Dal</label><input type="date" name="start" value="{{ filters.start or '' }}"></div>
         <div><label>Al</label><input type="date" name="end" value="{{ filters.end or '' }}"></div>
         <div><label>Conto</label><select name="account_id"><option value="">Tutti</option>{% for account in accounts %}<option value="{{ account.id }}" {% if filters.account_id == account.id %}selected{% endif %}>{{ account.name }}</option>{% endfor %}</select></div>
         <div><label>Categoria</label><select name="category"><option value="">Tutte</option>{% for c in categories %}<option value="{{ c.name }}" {% if filters.category == c.name %}selected{% endif %}>{{ c.name }}</option>{% endfor %}</select></div>
-        <div class="filter-actions"><button type="submit">Applica</button><a class="button secondary" href="/">Reset</a></div>
+        <div class="filter-actions"><button type="submit">Applica</button><a class="button secondary" href="{{ request.url.path }}">Reset</a></div>
       </form>
     </section>
 
+    {% if active_page == 'overview' %}
     <section class="cards">
       <article class="card"><span>Entrate</span><strong>€{{ '%.2f'|format(summary.income) }}</strong></article>
       <article class="card"><span>Spese</span><strong>€{{ '%.2f'|format(summary.expenses) }}</strong></article>
       <article class="card"><span>Cash flow netto</span><strong class="{% if summary.net_cashflow < 0 %}negative{% endif %}">€{{ '%.2f'|format(summary.net_cashflow) }}</strong></article>
       <article class="card"><span>Tasso di risparmio</span><strong>{% if summary.savings_rate is not none %}{{ summary.savings_rate }}%{% else %}—{% endif %}</strong></article>
     </section>
+    {% endif %}
 
+    {% if active_page == 'budget' %}
     <section class="panel budget-panel">
       <div class="panel-heading budget-heading">
         <div><h2>Budget mensile</h2><p class="muted small">Confronto tra tetto impostato, consuntivo e proiezione a fine mese.</p></div>
@@ -102,7 +115,9 @@
       </div>
       <p id="budget-status" class="muted small" role="status"></p>
     </section>
+    {% endif %}
 
+    {% if active_page == 'insights' %}
     <section class="dashboard-grid">
       <article class="panel chart-panel wide">
         <div class="panel-heading"><div><h2>Andamento mensile</h2><p class="muted small">Entrate, spese e saldo nel periodo selezionato.</p></div></div>
@@ -113,7 +128,9 @@
         <div id="category-chart" class="category-chart"></div>
       </article>
     </section>
+    {% endif %}
 
+    {% if active_page == 'overview' %}
     <section class="panel grid-2">
       <div>
         <div class="panel-heading"><h2>Importa estratto conto</h2><a class="button secondary" href="/imports">Documenti importati</a></div>
@@ -131,8 +148,8 @@
           <p id="import-status" class="muted small" role="status"></p>
         </form>
         {% if not accounts %}<p class="notice">Crea prima almeno un conto con il pulsante “+ Conto”.</p>{% endif %}
-      </div>
-      <div>
+        </div>
+        <div>
         <h2>Qualità dei dati</h2>
         <dl>
           <div><dt>Righe duplicate</dt><dd>{{ summary.duplicate_rows }}</dd></div>
@@ -143,7 +160,9 @@
         <p class="muted small">Le righe originali non vengono cancellate. Esclusioni, riconciliazioni e correzioni restano reversibili.</p>
       </div>
     </section>
+    {% endif %}
 
+    {% if active_page == 'recurrences' %}
     <section class="dashboard-grid recurring-grid">
       <article class="panel">
         <div class="panel-heading">
@@ -177,7 +196,9 @@
         {% else %}<p class="muted">Servono almeno tre occorrenze regolari dello stesso merchant per produrre una previsione.</p>{% endif %}
       </article>
     </section>
+    {% endif %}
 
+    {% if active_page == 'review' %}
     <section class="panel">
       <div class="panel-heading"><div><h2>Spese sospette</h2><p class="muted small">Sono incluse nel budget e nelle analisi: questa è solo una coda di controllo.</p></div><span class="count-badge">{{ suspicious|length }}</span></div>
       {% if suspicious %}
@@ -192,7 +213,9 @@
       </div>
       {% else %}<p class="muted">Nessuna spesa sospetta da controllare.</p>{% endif %}
     </section>
+    {% endif %}
 
+    {% if active_page == 'recurrences' %}
     <section class="panel">
       <div class="panel-heading">
         <div><h2>Ricorrenze e abbonamenti</h2><p class="muted small">Rilevati automaticamente o aggiunti manualmente. Nessun servizio esterno.</p></div>
@@ -221,7 +244,9 @@
       </div>
       {% else %}<p class="muted">Nessuna ricorrenza sufficientemente regolare rilevata nel periodo selezionato.</p>{% endif %}
     </section>
+    {% endif %}
 
+    {% if active_page == 'review' %}
     <section class="panel">
       <div class="panel-heading"><div><h2>Da verificare</h2><p class="muted small">Transazioni non classificate o con confidenza inferiore al 75%.</p></div><span class="count-badge">{{ review|length }}</span></div>
       {% if review %}
@@ -241,7 +266,9 @@
       </div>
       {% else %}<p class="muted">Nessuna transazione richiede revisione.</p>{% endif %}
     </section>
+    {% endif %}
 
+    {% if active_page == 'insights' %}
     <section class="panel">
       <h2>Opportunità di risparmio</h2>
       {% if suggestions %}
@@ -252,7 +279,9 @@
       </div>
       {% else %}<p class="muted">Servono alcuni mesi di movimenti discrezionali per generare suggerimenti basati sui dati.</p>{% endif %}
     </section>
+    {% endif %}
 
+    {% if active_page == 'transactions' %}
     <section class="panel">
       <div class="panel-heading"><div><h2>Transazioni</h2><p class="muted small">Ultime 100 righe che rispettano i filtri in alto.</p></div></div>
       <div class="table-wrap"><table>
@@ -270,11 +299,14 @@
         </tbody>
       </table></div>
     </section>
+    {% endif %}
+    {% if active_page == 'overview' %}
     <section class="panel backup-panel">
       <div class="panel-heading"><div><h2>Backup ed export locali</h2><p class="muted small">Snapshot SQLite verificati ed export scaricabili solo dal tuo computer.</p></div></div>
       <div class="backup-actions"><button type="button" class="button secondary" onclick="createBackup()">Crea backup</button><a class="button secondary" href="/api/export/csv">Esporta CSV</a><a class="button secondary" href="/api/export/xlsx">Esporta XLSX</a></div>
       <form id="restore-form" class="restore-form"><label>Ripristina da backup SQLite <input type="file" name="file" accept=".db,.sqlite,.sqlite3" required></label><button type="submit">Verifica e ripristina</button></form><p id="backup-status" class="muted small"></p>
     </section>
+    {% endif %}
   </main>
 
   <dialog id="recurrence-dialog">
@@ -336,12 +368,14 @@ function euro(v){ return new Intl.NumberFormat('it-IT',{style:'currency',currenc
 
 function renderCashflow(){
   const el=document.getElementById('cashflow-chart');
+  if(!el)return;
   if(!cashflow.length){el.innerHTML='<p class="muted empty">Nessun dato nel periodo.</p>';return;}
   const max=Math.max(...cashflow.flatMap(x=>[Number(x.income),Number(x.expenses)]),1);
   el.innerHTML=cashflow.map(x=>`<div class="month-group"><div class="bars"><div class="bar income" style="height:${Math.max(3,Number(x.income)/max*150)}px" title="Entrate ${euro(x.income)}"></div><div class="bar expense" style="height:${Math.max(3,Number(x.expenses)/max*150)}px" title="Spese ${euro(x.expenses)}"></div></div><strong>${x.month}</strong><span class="${Number(x.net)<0?'negative':''}">${euro(x.net)}</span></div>`).join('');
 }
 function renderCategories(){
   const el=document.getElementById('category-chart');
+  if(!el)return;
   if(!categoryTotals.length){el.innerHTML='<p class="muted empty">Nessuna spesa nel periodo.</p>';return;}
   const top=categoryTotals.slice(0,8), max=Math.max(...top.map(x=>Number(x.amount)),1);
   el.innerHTML=top.map(x=>`<div class="cat-row"><div class="cat-meta"><span>${x.category}</span><strong>${euro(x.amount)}</strong></div><div class="progress"><i style="width:${Number(x.amount)/max*100}%"></i></div></div>`).join('');
@@ -401,7 +435,7 @@ async function copyPreviousBudgets(){
   if(r.ok){status.textContent=`Copiati ${data.copied} budget da ${source}.`;setTimeout(()=>location.reload(),500)}else status.textContent=data.detail||'Copia non riuscita.';
 }
 
-document.getElementById('import-form').addEventListener('submit',async e=>{e.preventDefault();const status=document.getElementById('import-status');status.textContent='Importazione in corso…';const r=await fetch('/api/imports',{method:'POST',body:new FormData(e.target)});const data=await r.json();if(r.ok){if(data.review_url){status.textContent='Parsing completato. Apertura Human-check…';setTimeout(()=>location.href=data.review_url,450)}else{status.textContent=data.duplicate_file?'File già importato: nessun doppio conteggio.':`Importate ${data.imported} righe, saltate ${data.skipped}.`;setTimeout(()=>location.reload(),900)}}else status.textContent=data.detail||'Importazione non riuscita.';});
+const importForm=document.getElementById('import-form');if(importForm)importForm.addEventListener('submit',async e=>{e.preventDefault();const status=document.getElementById('import-status');status.textContent='Importazione in corso…';const r=await fetch('/api/imports',{method:'POST',body:new FormData(e.target)});const data=await r.json();if(r.ok){if(data.review_url){status.textContent='Parsing completato. Apertura Human-check…';setTimeout(()=>location.href=data.review_url,450)}else{status.textContent=data.duplicate_file?'File già importato: nessun doppio conteggio.':`Importate ${data.imported} righe, saltate ${data.skipped}.`;setTimeout(()=>location.reload(),900)}}else status.textContent=data.detail||'Importazione non riuscita.';});
 
 document.getElementById('account-form').addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(e.target);const status=document.getElementById('account-status');const r=await fetch('/api/accounts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:f.get('name'),account_type:f.get('account_type'),currency:'EUR'})});if(r.ok){location.reload()}else {const d=await r.json();status.textContent=d.detail||'Creazione non riuscita.';}});
 
@@ -430,7 +464,7 @@ async function resetRecurrence(){
   if(r.ok){status.textContent='Controllo manuale rimosso.';setTimeout(()=>location.reload(),450)}else{const d=await r.json();status.textContent=d.detail||'Nessun controllo manuale da rimuovere.'}
 }
 async function createBackup(){const status=document.getElementById('backup-status');status.textContent='Creazione snapshot locale…';const r=await fetch('/api/backup',{method:'POST'}),data=await r.json();status.textContent=r.ok?`Backup verificato: ${data.filename}`:(data.detail||'Backup non riuscito.');}
-document.getElementById('restore-form').addEventListener('submit',async e=>{e.preventDefault();if(!confirm('Il database corrente verrà sostituito. Verrà creato prima un backup di sicurezza. Continuare?'))return;const status=document.getElementById('backup-status');status.textContent='Verifica e ripristino in corso…';const r=await fetch('/api/backup/restore',{method:'POST',body:new FormData(e.currentTarget)}),data=await r.json();if(r.ok){status.textContent=`Ripristino completato. Backup di sicurezza: ${data.safety_backup}`;setTimeout(()=>location.reload(),500)}else status.textContent=data.detail||'Ripristino non riuscito.';});
+const restoreForm=document.getElementById('restore-form');if(restoreForm)restoreForm.addEventListener('submit',async e=>{e.preventDefault();if(!confirm('Il database corrente verrà sostituito. Verrà creato prima un backup di sicurezza. Continuare?'))return;const status=document.getElementById('backup-status');status.textContent='Verifica e ripristino in corso…';const r=await fetch('/api/backup/restore',{method:'POST',body:new FormData(e.currentTarget)}),data=await r.json();if(r.ok){status.textContent=`Ripristino completato. Backup di sicurezza: ${data.safety_backup}`;setTimeout(()=>location.reload(),500)}else status.textContent=data.detail||'Ripristino non riuscito.';});
 </script>
 </body>
 </html>

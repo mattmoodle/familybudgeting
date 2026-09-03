@@ -94,6 +94,11 @@ def optional_int(value: str | None, label: str) -> int | None:
 
 
 @router.get("/", response_class=HTMLResponse)
+@router.get("/budget", response_class=HTMLResponse)
+@router.get("/transactions", response_class=HTMLResponse)
+@router.get("/review", response_class=HTMLResponse)
+@router.get("/recurrences", response_class=HTMLResponse)
+@router.get("/insights", response_class=HTMLResponse)
 def home(
     request: Request,
     start: str | None = None,
@@ -103,6 +108,14 @@ def home(
     budget_month: str | None = None,
     db: Session = Depends(get_db),
 ):
+    active_page = {
+        "/": "overview",
+        "/budget": "budget",
+        "/transactions": "transactions",
+        "/review": "review",
+        "/recurrences": "recurrences",
+        "/insights": "insights",
+    }.get(request.url.path, "overview")
     start_date, end_date = optional_date(start), optional_date(end)
     selected_account_id = optional_int(account_id, "account_id")
     summary = dashboard_summary(db, start_date, end_date, selected_account_id, category)
@@ -136,6 +149,7 @@ def home(
         name="dashboard.html",
         context={
             "summary": summary,
+            "active_page": active_page,
             "accounts": accounts,
             "categories": categories,
             "recent": recent,
