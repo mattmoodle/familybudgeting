@@ -56,6 +56,7 @@
       <label class="hc-recurring">Ricorrente <select id="recurring-flag"><option value="no">No</option><option value="yes">Sì</option></select><select id="recurring-cadence" disabled><option value="monthly">Mensile</option><option value="weekly">Settimanale</option><option value="biweekly">Bisettimanale</option><option value="bimonthly">Bimestrale</option><option value="quarterly">Trimestrale</option><option value="semiannual">Semestrale</option><option value="annual">Annuale</option></select></label>
       <div class="hc-suspicion"><button type="button" class="suspicion-toggle" id="review-suspicious" aria-pressed="false" onclick="toggleSuspicion('review-suspicious')">Segnala come spesa sospetta</button></div>
       <div class="hc-actions">
+        <button type="button" class="hc-back" id="review-back" onclick="previousReview()">← Riga precedente</button>
         <button type="button" class="hc-no" onclick="decide('rejected')">✕ No</button>
         <button type="button" class="hc-yes" onclick="decide('accepted')">✓ Sì</button>
       </div>
@@ -74,7 +75,7 @@
       <label>Ricorrente<select id="correction-recurring"><option value="no">No</option><option value="yes">Sì</option></select></label><label>Frequenza<select id="correction-cadence" disabled><option value="monthly">Mensile</option><option value="weekly">Settimanale</option><option value="biweekly">Bisettimanale</option><option value="bimonthly">Bimestrale</option><option value="quarterly">Trimestrale</option><option value="semiannual">Semestrale</option><option value="annual">Annuale</option></select></label>
       <div class="wide suspicion-control"><button type="button" class="suspicion-toggle" id="correction-suspicious" aria-pressed="false" onclick="toggleSuspicion('correction-suspicious')">Segnala come spesa sospetta</button><small class="muted">Sarà conteggiata nel budget, ma resterà nella lista da verificare.</small></div>
       <label class="wide">Nota opzionale<textarea id="correction-note" rows="3" placeholder="Es. descrizione PDF troncata, importo con segno errato…"></textarea></label>
-      <div class="wide hc-form-actions"><button type="submit">Salva correzione e continua →</button></div>
+      <div class="wide hc-form-actions"><button type="button" class="button secondary" onclick="skipCorrection()">Salta per ora →</button><button type="submit">Salva correzione e continua →</button></div>
     </form>
   </section>
 
@@ -126,6 +127,7 @@ function showReview(item){
   document.getElementById('phase-title').textContent='Conferma il parsing';
   document.getElementById('phase-help').textContent='Sì se data, descrizione, importo e interpretazione sono corretti; No se c’è qualcosa da sistemare.';
   document.getElementById('sequence-label').textContent=`Riga ${item.sequence} di ${items.length}`;
+  document.getElementById('review-back').disabled=items.findIndex(x=>x.id===item.id)===0;
   document.getElementById('original-text').textContent=item.original_text;
   document.getElementById('parsed-date').textContent=item.parsed_booked_on;
   document.getElementById('parsed-description').textContent=item.parsed_description;
@@ -142,6 +144,7 @@ function showReview(item){
   document.getElementById('recurring-cadence').value=item.recurrence_cadence||'monthly';
   setSuspicionToggle('review-suspicious',item.is_suspicious);
 }
+function previousReview(){const index=items.findIndex(item=>item.id===current?.id);if(index>0)showReview(items[index-1]);}
 async function decide(decision){
   if(!current)return;
   const card=document.getElementById('swipe-card');
@@ -167,8 +170,9 @@ function startCorrections(){
 function showCorrection(){
   rejected=items.filter(x=>x.decision==='rejected');
   if(!rejected.length){routePhase();return;}
-  const item=rejected[0]; current=item;
-  document.getElementById('correction-count').textContent=`${rejected.length} da correggere`;
+  correctionIndex=Math.min(correctionIndex,rejected.length-1);
+  const item=rejected[correctionIndex]; current=item;
+  document.getElementById('correction-count').textContent=`${rejected.length} da correggere · ${correctionIndex+1}/${rejected.length}`;
   document.getElementById('correction-original').textContent=item.original_text;
   document.getElementById('correction-date').value=item.parsed_booked_on;
   document.getElementById('correction-description').value=item.parsed_description;
@@ -178,6 +182,7 @@ function showCorrection(){
   document.getElementById('correction-recurring').value=item.is_recurring?'yes':'no';document.getElementById('correction-cadence').disabled=!item.is_recurring;document.getElementById('correction-cadence').value=item.recurrence_cadence||'monthly';
   setSuspicionToggle('correction-suspicious',item.is_suspicious);
 }
+function skipCorrection(){rejected=items.filter(x=>x.decision==='rejected');if(rejected.length<2){alert('Questa è l’unica riga rimasta: puoi lasciarla qui e riprendere la revisione più tardi.');return;}correctionIndex=(correctionIndex+1)%rejected.length;showCorrection();}
 async function addCategory(target='correction'){
   const name=prompt('Nome della nuova categoria (es. Bills):'); if(!name||!name.trim())return;
   const status=document.getElementById('category-status');

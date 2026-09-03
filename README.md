@@ -573,6 +573,8 @@ During **Human-check**, each imported expense can also be marked **Ricorrente: S
 
 The first Human-check step also allows direct edits to date, description, amount and category, plus recurring and suspicious flags. Pressing **Sì** after changing a detail stores it as a manual correction without sending the row to the later correction screen. The local classifier then learns the manually chosen category from the corrected merchant/description; amounts and dates are saved exactly as entered but are not predicted by the classifier.
 
+Human-check navigation is reversible during the local review: use **Riga precedente** to revisit an earlier decision, and **Salta per ora** to postpone a rejected row while correcting other rows. Skipped rows remain in staging and must still be corrected before final import; nothing is discarded.
+
 The **Modifica transazione** dialog offers the same **Spesa ricorrente** flag for an already recorded expense. Select a frequency to create or update its local manual recurrence; untick it and save to remove that manual recurrence again.
 
 In Human-check corrections, **Segnala come spesa sospetta** adds the movement to the dashboard’s local suspicious-expenses queue. Suspicious movements are always included in totals, analytics and budget calculations; accepting one only clears the review flag.
