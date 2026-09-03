@@ -6,6 +6,10 @@
 
 The interface is organized into dedicated pages accessible from the top menu: **Panoramica**, **Budget**, **Transazioni**, **Da verificare**, **Ricorrenze**, **Analisi**, and **Documenti**. This keeps focused workflows separate while preserving the same local SQLite data and offline operation.
 
+## Supported statement formats
+
+PDF import includes dedicated local parsers for BBVA, BCC Roma, BPER, PayPal, Satispay and Numia formats, alongside generic CSV/XLSX import. BBVA **Ultime transazioni** PDFs are read as multi-line rows with booking date, value date, description and signed amount.
+
 ## Review queue
 
 Saving an item in **Da verificare** records the selected category and marks the transaction as reviewed. You may intentionally leave it as **Uncategorized**; it will no longer return to the review queue. No automatic rule is created for an Uncategorized choice.

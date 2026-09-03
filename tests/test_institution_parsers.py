@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from app.services.importers.bcc_pdf_importer import BccBankPdfImporter
+from app.services.importers.bbva_pdf_importer import BbvaPdfImporter
 from app.services.importers.bper_pdf_importer import BperPdfImporter
 from app.services.importers.numia_pdf_importer import NumiaCardPdfImporter
 from app.services.importers.paypal_pdf_importer import PaypalPdfImporter
@@ -83,3 +84,21 @@ def test_bper_new_layout_sign_column():
     """
     rows = BperPdfImporter().parse_text(text)
     assert [r.amount for r in rows] == [Decimal("1100.00"), Decimal("-1090.77")]
+
+
+def test_bbva_rows_keep_value_date_and_wrapped_description():
+    text = """
+    Ultime transazioni
+    Data Causale Importo Saldo
+    31/08/2026 Example Shop -70,75 € 5.247,54 EUR
+    Data valuta: 31/08/2026 Pagamento con carta
+    30/08/2026 Bonifico eseguito -300,00 € 5.318,29 EUR
+    Data valuta: 29/08/2026 Lavori di manutenzione
+    urgenti
+    1/1
+    """
+    rows = BbvaPdfImporter().parse_text(text)
+    assert [row.amount for row in rows] == [Decimal("-70.75"), Decimal("-300.00")]
+    assert rows[0].value_on.isoformat() == "2026-08-31"
+    assert rows[1].value_on.isoformat() == "2026-08-29"
+    assert rows[1].description == "Bonifico eseguito Lavori di manutenzione urgenti"
