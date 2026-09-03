@@ -54,7 +54,7 @@
       </div>
       <p class="hc-question">La riga è stata riconosciuta correttamente?</p>
       <label class="hc-recurring">Ricorrente <select id="recurring-flag"><option value="no">No</option><option value="yes">Sì</option></select><select id="recurring-cadence" disabled><option value="monthly">Mensile</option><option value="weekly">Settimanale</option><option value="biweekly">Bisettimanale</option><option value="bimonthly">Bimestrale</option><option value="quarterly">Trimestrale</option><option value="semiannual">Semestrale</option><option value="annual">Annuale</option></select></label>
-      <label class="hc-recurring check"><input type="checkbox" id="review-suspicious"> Segnala come spesa sospetta</label>
+      <div class="hc-suspicion"><button type="button" class="suspicion-toggle" id="review-suspicious" aria-pressed="false" onclick="toggleSuspicion('review-suspicious')">Segnala come spesa sospetta</button></div>
       <div class="hc-actions">
         <button type="button" class="hc-no" onclick="decide('rejected')">✕ No</button>
         <button type="button" class="hc-yes" onclick="decide('accepted')">✓ Sì</button>
@@ -72,7 +72,7 @@
       <label>Importo<input type="number" id="correction-amount" step="0.01" required></label>
       <label>Categoria<div class="category-picker"><select id="correction-category" required>{% for c in categories %}<option value="{{ c.name }}">{{ c.name }}</option>{% endfor %}</select><button type="button" class="button secondary" onclick="addCategory()">+ Categoria</button></div><small id="category-status" class="muted"></small></label>
       <label>Ricorrente<select id="correction-recurring"><option value="no">No</option><option value="yes">Sì</option></select></label><label>Frequenza<select id="correction-cadence" disabled><option value="monthly">Mensile</option><option value="weekly">Settimanale</option><option value="biweekly">Bisettimanale</option><option value="bimonthly">Bimestrale</option><option value="quarterly">Trimestrale</option><option value="semiannual">Semestrale</option><option value="annual">Annuale</option></select></label>
-      <label class="wide check"><input type="checkbox" id="correction-suspicious"> Segnala come spesa sospetta <small class="muted">Sarà conteggiata nel budget, ma resterà nella lista da verificare.</small></label>
+      <div class="wide suspicion-control"><button type="button" class="suspicion-toggle" id="correction-suspicious" aria-pressed="false" onclick="toggleSuspicion('correction-suspicious')">Segnala come spesa sospetta</button><small class="muted">Sarà conteggiata nel budget, ma resterà nella lista da verificare.</small></div>
       <label class="wide">Nota opzionale<textarea id="correction-note" rows="3" placeholder="Es. descrizione PDF troncata, importo con segno errato…"></textarea></label>
       <div class="wide hc-form-actions"><button type="submit">Salva correzione e continua →</button></div>
     </form>
@@ -140,7 +140,7 @@ function showReview(item){
   document.getElementById('recurring-flag').value=item.is_recurring?'yes':'no';
   document.getElementById('recurring-cadence').disabled=!item.is_recurring;
   document.getElementById('recurring-cadence').value=item.recurrence_cadence||'monthly';
-  document.getElementById('review-suspicious').checked=item.is_suspicious;
+  setSuspicionToggle('review-suspicious',item.is_suspicious);
 }
 async function decide(decision){
   if(!current)return;
@@ -149,7 +149,7 @@ async function decide(decision){
   const id=current.id;
   const recurring=document.getElementById('recurring-flag').value==='yes',booked_on=document.getElementById('review-date').value,description=document.getElementById('review-description').value.trim(),amount=Number(document.getElementById('review-amount').value),category=document.getElementById('review-category').value;
   const edited=booked_on!==current.parsed_booked_on||description!==current.parsed_description||amount!==Number(current.parsed_amount)||category!==current.parsed_category;
-  const body={decision,apply_manual_correction:decision==='accepted'&&edited,booked_on,description,amount,category,is_recurring:recurring,recurrence_cadence:recurring?document.getElementById('recurring-cadence').value:null,is_suspicious:document.getElementById('review-suspicious').checked};
+  const body={decision,apply_manual_correction:decision==='accepted'&&edited,booked_on,description,amount,category,is_recurring:recurring,recurrence_cadence:recurring?document.getElementById('recurring-cadence').value:null,is_suspicious:document.getElementById('review-suspicious').dataset.active==='true'};
   const r=await fetch(`/api/human-check/items/${id}/decision`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   if(!r.ok){card.className='panel hc-card';alert('Impossibile salvare la decisione');return;}
   const updated=await r.json();
@@ -176,7 +176,7 @@ function showCorrection(){
   document.getElementById('correction-category').value=item.parsed_category;
   document.getElementById('correction-note').value='';
   document.getElementById('correction-recurring').value=item.is_recurring?'yes':'no';document.getElementById('correction-cadence').disabled=!item.is_recurring;document.getElementById('correction-cadence').value=item.recurrence_cadence||'monthly';
-  document.getElementById('correction-suspicious').checked=item.is_suspicious;
+  setSuspicionToggle('correction-suspicious',item.is_suspicious);
 }
 async function addCategory(target='correction'){
   const name=prompt('Nome della nuova categoria (es. Bills):'); if(!name||!name.trim())return;
@@ -195,7 +195,7 @@ async function refreshCategories(selectedName,target){
 }
 document.getElementById('correction-form').addEventListener('submit',async e=>{
   e.preventDefault(); if(!current)return;
-  const recurring=document.getElementById('correction-recurring').value==='yes';const body={booked_on:document.getElementById('correction-date').value,description:document.getElementById('correction-description').value,amount:Number(document.getElementById('correction-amount').value),category:document.getElementById('correction-category').value,note:document.getElementById('correction-note').value||null,is_recurring:recurring,recurrence_cadence:recurring?document.getElementById('correction-cadence').value:null,is_suspicious:document.getElementById('correction-suspicious').checked};
+  const recurring=document.getElementById('correction-recurring').value==='yes';const body={booked_on:document.getElementById('correction-date').value,description:document.getElementById('correction-description').value,amount:Number(document.getElementById('correction-amount').value),category:document.getElementById('correction-category').value,note:document.getElementById('correction-note').value||null,is_recurring:recurring,recurrence_cadence:recurring?document.getElementById('correction-cadence').value:null,is_suspicious:document.getElementById('correction-suspicious').dataset.active==='true'};
   const r=await fetch(`/api/human-check/items/${current.id}/correction`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   if(!r.ok){alert('Impossibile salvare la correzione');return;}
   const updated=await r.json(); items=items.map(x=>x.id===updated.id?updated:x); updateProgress(); showCorrection();
@@ -207,6 +207,8 @@ function showComplete(){
   document.getElementById('phase-title').textContent='Pronto per il commit';
   document.getElementById('phase-help').textContent='Il controllo è completo, ma le transazioni sono ancora fuori dal libro mastro.';
 }
+function setSuspicionToggle(id,active){const button=document.getElementById(id);button.dataset.active=String(active);button.setAttribute('aria-pressed',String(active));button.classList.toggle('active',active);button.textContent=active?'⚑ Spesa sospetta':'Segnala come spesa sospetta';}
+function toggleSuspicion(id){const button=document.getElementById(id);setSuspicionToggle(id,button.dataset.active!=='true');}
 async function finalizeBatch(){
   const button=document.getElementById('finalize-button'), status=document.getElementById('finalize-status');
   button.disabled=true; status.textContent='Importazione e riconciliazione in corso…';
