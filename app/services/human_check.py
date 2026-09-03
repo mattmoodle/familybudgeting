@@ -77,6 +77,7 @@ def finalize_human_check(db: Session, batch_id: int) -> tuple[int, int]:
             category=category,
             category_confidence=Decimal("1.000") if item.decision == HumanCheckDecision.CORRECTED.value else item.parsed_confidence,
             category_source="manual" if item.decision == HumanCheckDecision.CORRECTED.value else "human-approved",
+            is_suspicious=item.is_suspicious,
             manual_note=item.user_note,
             raw_data=json.dumps({"human_check_item": item.id, "original": item.original_text}, ensure_ascii=False),
         )

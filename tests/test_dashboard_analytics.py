@@ -1,12 +1,12 @@
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
 from app.db.base import Base
 from app.models.entities import Account, Transaction
-from app.services.analytics import category_totals, dashboard_summary, monthly_cashflow, review_queue
+from app.services.analytics import category_totals, dashboard_summary, monthly_cashflow, review_queue, suspicious_queue
 
 
 def tx(account_id: int, d: date, desc: str, amount: str, category: str, confidence: str = "0.95"):
@@ -38,6 +38,9 @@ def test_dashboard_filters_and_review_queue():
                 tx(card.id, date(2026, 7, 4), "Mystery", "-20", "Uncategorized", "0.20"),
             ]
         )
+        db.flush()
+        mortgage = db.scalar(select(Transaction).where(Transaction.description == "Mortgage"))
+        mortgage.is_suspicious = True
         db.commit()
 
         summary = dashboard_summary(db)
@@ -56,3 +59,4 @@ def test_dashboard_filters_and_review_queue():
 
         review = review_queue(db)
         assert [item.description for item in review] == ["Mystery"]
+        assert [item.description for item in suspicious_queue(db)] == ["Mortgage"]

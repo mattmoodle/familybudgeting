@@ -569,6 +569,8 @@ During **Human-check**, each imported expense can also be marked **Ricorrente: S
 
 The **Modifica transazione** dialog offers the same **Spesa ricorrente** flag for an already recorded expense. Select a frequency to create or update its local manual recurrence; untick it and save to remove that manual recurrence again.
 
+In Human-check corrections, **Segnala come spesa sospetta** adds the movement to the dashboard’s local suspicious-expenses queue. Suspicious movements are always included in totals, analytics and budget calculations; accepting one only clears the review flag.
+
 ## Local backup and export (v0.8)
 
 The application can create a validated SQLite snapshot in `data/backups/` using `POST /api/backup`. The snapshot is produced with SQLite's backup API and checked with `PRAGMA integrity_check` before success is returned.

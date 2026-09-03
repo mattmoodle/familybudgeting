@@ -32,6 +32,7 @@ class TransactionPatch(BaseModel):
     excluded_from_analytics: bool | None = None
     manual_note: str | None = None
     create_rule: bool = False
+    is_suspicious: bool | None = None
     is_recurring: bool | None = None
     recurrence_cadence: str | None = Field(default=None, pattern=r"^(weekly|biweekly|monthly|bimonthly|quarterly|semiannual|annual)$")
 
@@ -49,6 +50,7 @@ class TransactionRead(BaseModel):
     is_internal_transfer: bool
     excluded_from_analytics: bool
     account_id: int
+    is_suspicious: bool
 
 
 class ImportResult(BaseModel):
@@ -64,6 +66,7 @@ class HumanCheckDecisionPatch(BaseModel):
     decision: str
     is_recurring: bool = False
     recurrence_cadence: str | None = Field(default=None, pattern=r"^(weekly|biweekly|monthly|bimonthly|quarterly|semiannual|annual)$")
+    is_suspicious: bool = False
 
 
 class HumanCheckCorrection(BaseModel):
@@ -74,6 +77,7 @@ class HumanCheckCorrection(BaseModel):
     note: str | None = None
     is_recurring: bool = False
     recurrence_cadence: str | None = Field(default=None, pattern=r"^(weekly|biweekly|monthly|bimonthly|quarterly|semiannual|annual)$")
+    is_suspicious: bool = False
 
 
 class HumanCheckItemRead(BaseModel):
@@ -92,6 +96,7 @@ class HumanCheckItemRead(BaseModel):
     decision: str
     is_recurring: bool
     recurrence_cadence: str | None
+    is_suspicious: bool
 
 
 class MonthlyCategoryStat(BaseModel):

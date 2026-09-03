@@ -64,6 +64,7 @@
       <label>Importo<input type="number" id="correction-amount" step="0.01" required></label>
       <label>Categoria<div class="category-picker"><select id="correction-category" required>{% for c in categories %}<option value="{{ c.name }}">{{ c.name }}</option>{% endfor %}</select><button type="button" class="button secondary" onclick="addCategory()">+ Categoria</button></div><small id="category-status" class="muted"></small></label>
       <label>Ricorrente<select id="correction-recurring"><option value="no">No</option><option value="yes">Sì</option></select></label><label>Frequenza<select id="correction-cadence" disabled><option value="monthly">Mensile</option><option value="weekly">Settimanale</option><option value="biweekly">Bisettimanale</option><option value="bimonthly">Bimestrale</option><option value="quarterly">Trimestrale</option><option value="semiannual">Semestrale</option><option value="annual">Annuale</option></select></label>
+      <label class="wide check"><input type="checkbox" id="correction-suspicious"> Segnala come spesa sospetta <small class="muted">Sarà conteggiata nel budget, ma resterà nella lista da verificare.</small></label>
       <label class="wide">Nota opzionale<textarea id="correction-note" rows="3" placeholder="Es. descrizione PDF troncata, importo con segno errato…"></textarea></label>
       <div class="wide hc-form-actions"><button type="submit">Salva correzione e continua →</button></div>
     </form>
@@ -159,6 +160,7 @@ function showCorrection(){
   document.getElementById('correction-category').value=item.parsed_category;
   document.getElementById('correction-note').value='';
   document.getElementById('correction-recurring').value=item.is_recurring?'yes':'no';document.getElementById('correction-cadence').disabled=!item.is_recurring;document.getElementById('correction-cadence').value=item.recurrence_cadence||'monthly';
+  document.getElementById('correction-suspicious').checked=item.is_suspicious;
 }
 async function addCategory(){
   const name=prompt('Nome della nuova categoria (es. Bills):'); if(!name||!name.trim())return;
@@ -174,7 +176,7 @@ async function refreshCategories(selectedName){
 }
 document.getElementById('correction-form').addEventListener('submit',async e=>{
   e.preventDefault(); if(!current)return;
-  const recurring=document.getElementById('correction-recurring').value==='yes';const body={booked_on:document.getElementById('correction-date').value,description:document.getElementById('correction-description').value,amount:Number(document.getElementById('correction-amount').value),category:document.getElementById('correction-category').value,note:document.getElementById('correction-note').value||null,is_recurring:recurring,recurrence_cadence:recurring?document.getElementById('correction-cadence').value:null};
+  const recurring=document.getElementById('correction-recurring').value==='yes';const body={booked_on:document.getElementById('correction-date').value,description:document.getElementById('correction-description').value,amount:Number(document.getElementById('correction-amount').value),category:document.getElementById('correction-category').value,note:document.getElementById('correction-note').value||null,is_recurring:recurring,recurrence_cadence:recurring?document.getElementById('correction-cadence').value:null,is_suspicious:document.getElementById('correction-suspicious').checked};
   const r=await fetch(`/api/human-check/items/${current.id}/correction`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   if(!r.ok){alert('Impossibile salvare la correzione');return;}
   const updated=await r.json(); items=items.map(x=>x.id===updated.id?updated:x); updateProgress(); showCorrection();

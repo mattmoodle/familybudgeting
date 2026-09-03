@@ -138,6 +138,7 @@
           <div><dt>Righe duplicate</dt><dd>{{ summary.duplicate_rows }}</dd></div>
           <div><dt>Trasferimenti interni esclusi</dt><dd>€{{ '%.2f'|format(summary.excluded_internal_transfers) }}</dd></div>
           <div><dt>Da verificare</dt><dd>{{ review|length }}</dd></div>
+          <div><dt>Sospette</dt><dd>{{ suspicious|length }}</dd></div>
         </dl>
         <p class="muted small">Le righe originali non vengono cancellate. Esclusioni, riconciliazioni e correzioni restano reversibili.</p>
       </div>
@@ -175,6 +176,21 @@
         </div>
         {% else %}<p class="muted">Servono almeno tre occorrenze regolari dello stesso merchant per produrre una previsione.</p>{% endif %}
       </article>
+    </section>
+
+    <section class="panel">
+      <div class="panel-heading"><div><h2>Spese sospette</h2><p class="muted small">Sono incluse nel budget e nelle analisi: questa è solo una coda di controllo.</p></div><span class="count-badge">{{ suspicious|length }}</span></div>
+      {% if suspicious %}
+      <div class="review-list">
+        {% for tx in suspicious %}
+        <article class="review-row" id="suspicious-{{ tx.id }}">
+          <div class="review-main"><span class="date">{{ tx.booked_on }}</span><strong>{{ tx.description }}</strong><span class="muted small">Conto: {{ tx.account.name }} · Categoria: {{ tx.category }}</span></div>
+          <div class="amount {% if tx.amount < 0 %}negative{% endif %}">€{{ '%.2f'|format(tx.amount) }}</div>
+          <div class="review-controls"><button type="button" onclick="acceptSuspicion({{ tx.id }})">Accetta spesa</button></div>
+        </article>
+        {% endfor %}
+      </div>
+      {% else %}<p class="muted">Nessuna spesa sospetta da controllare.</p>{% endif %}
     </section>
 
     <section class="panel">
@@ -246,7 +262,7 @@
           <tr id="tx-{{ tx.id }}" class="{% if tx.excluded_from_analytics %}excluded-row{% endif %}">
             <td>{{ tx.booked_on }}</td><td class="description-cell">{{ tx.description }}</td><td><span class="category-label">{{ tx.category }}</span></td>
             <td class="number {% if tx.amount < 0 %}negative{% else %}positive{% endif %}">€{{ '%.2f'|format(tx.amount) }}</td>
-            <td>{% if tx.is_duplicate %}<span class="pill warn">duplicato</span>{% elif tx.is_internal_transfer %}<span class="pill neutral">trasferimento</span>{% elif tx.excluded_from_analytics %}<span class="pill neutral">escluso</span>{% else %}<span class="pill ok">conteggiato</span>{% endif %}</td>
+            <td>{% if tx.is_suspicious %}<span class="pill warn">sospetta · conteggiata</span>{% elif tx.is_duplicate %}<span class="pill warn">duplicato</span>{% elif tx.is_internal_transfer %}<span class="pill neutral">trasferimento</span>{% elif tx.excluded_from_analytics %}<span class="pill neutral">escluso</span>{% else %}<span class="pill ok">conteggiato</span>{% endif %}</td>
             {% set recurrence = transaction_recurrences.get(tx.id) %}
             <td><button class="icon-button" type="button" title="Modifica" onclick="openEdit({{ tx.id }}, {{ tx.category|tojson }}, {{ 'true' if tx.excluded_from_analytics else 'false' }}, {{ (recurrence.override_cadence if recurrence and recurrence.status == 'confirmed' else none)|tojson }})">Modifica</button></td>
           </tr>
@@ -345,6 +361,7 @@ async function saveCategory(id){
   const r=await fetch(`/api/transactions/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({category,create_rule})});
   if(r.ok){document.getElementById(`review-${id}`).remove(); const label=document.querySelector(`#tx-${id} .category-label`); if(label) label.textContent=category;} else alert('Impossibile salvare la correzione');
 }
+async function acceptSuspicion(id){const r=await fetch(`/api/transactions/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({is_suspicious:false})});if(r.ok){document.getElementById(`suspicious-${id}`).remove();}else alert('Impossibile aggiornare la spesa sospetta.');}
 async function addReviewCategory(id){
   const name=prompt('Nome della nuova categoria (es. Bank Fees):'); if(!name||!name.trim())return;
   const r=await fetch('/api/categories',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name.trim()})});

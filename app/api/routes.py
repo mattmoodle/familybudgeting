@@ -48,6 +48,7 @@ from app.services.analytics import (
     monthly_cashflow,
     monthly_category_stats,
     review_queue,
+    suspicious_queue,
     saving_suggestions,
 )
 from app.services.backup_export import (
@@ -140,6 +141,7 @@ def home(
             "recent": recent,
             "transaction_recurrences": transaction_recurrences,
             "review": review_queue(db),
+            "suspicious": suspicious_queue(db),
             "suggestions": saving_suggestions(db, start_date, end_date, selected_account_id, category),
             "category_totals": [{"category": x["category"], "amount": float(x["amount"])} for x in category_totals(db, start_date, end_date, selected_account_id, category)],
             "cashflow": [{"month": x["month"], "income": float(x["income"]), "expenses": float(x["expenses"]), "net": float(x["net"])} for x in monthly_cashflow(db, start_date, end_date, selected_account_id, category)],
@@ -256,6 +258,8 @@ def patch_transaction(transaction_id: int, payload: TransactionPatch, db: Sessio
         tx.excluded_from_analytics = payload.excluded_from_analytics
     if payload.manual_note is not None:
         tx.manual_note = payload.manual_note
+    if payload.is_suspicious is not None:
+        tx.is_suspicious = payload.is_suspicious
     if payload.is_recurring is not None:
         pattern_key = f"manual:transaction:{tx.id}"
         if payload.is_recurring:
@@ -321,6 +325,7 @@ def human_check_decision(item_id: int, payload: HumanCheckDecisionPatch, db: Ses
     item.decision = payload.decision
     item.is_recurring = payload.is_recurring
     item.recurrence_cadence = payload.recurrence_cadence if payload.is_recurring else None
+    item.is_suspicious = payload.is_suspicious
     db.commit()
     db.refresh(item)
     return item
@@ -338,6 +343,7 @@ def human_check_correction(item_id: int, payload: HumanCheckCorrection, db: Sess
     item.user_note = payload.note
     item.is_recurring = payload.is_recurring
     item.recurrence_cadence = payload.recurrence_cadence if payload.is_recurring else None
+    item.is_suspicious = payload.is_suspicious
     item.decision = HumanCheckDecision.CORRECTED.value
     db.commit()
     db.refresh(item)

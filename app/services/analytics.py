@@ -111,6 +111,16 @@ def review_queue(db: Session, limit: int = 30) -> list[Transaction]:
     ).all()
 
 
+def suspicious_queue(db: Session, limit: int = 30) -> list[Transaction]:
+    """Flagged movements stay in analytics; this queue is only a review reminder."""
+    return db.scalars(
+        select(Transaction)
+        .where(Transaction.is_suspicious.is_(True))
+        .order_by(Transaction.booked_on.desc(), Transaction.id.desc())
+        .limit(limit)
+    ).all()
+
+
 def saving_suggestions(db: Session, start: date | None = None, end: date | None = None, account_id: int | None = None, category: str | None = None) -> list[SavingSuggestion]:
     stats = monthly_category_stats(db, start, end, account_id, category)
     by_category: dict[str, list[Decimal]] = defaultdict(list)
