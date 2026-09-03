@@ -293,7 +293,7 @@
             <td class="number {% if tx.amount < 0 %}negative{% else %}positive{% endif %}">€{{ '%.2f'|format(tx.amount) }}</td>
             <td>{% if tx.is_suspicious %}<span class="pill warn">sospetta · conteggiata</span>{% elif tx.is_duplicate %}<span class="pill warn">duplicato</span>{% elif tx.is_internal_transfer %}<span class="pill neutral">trasferimento</span>{% elif tx.excluded_from_analytics %}<span class="pill neutral">escluso</span>{% else %}<span class="pill ok">conteggiato</span>{% endif %}</td>
             {% set recurrence = transaction_recurrences.get(tx.id) %}
-            <td><button class="icon-button" type="button" title="Modifica" onclick="openEdit({{ tx.id }}, {{ tx.category|tojson }}, {{ 'true' if tx.excluded_from_analytics else 'false' }}, {{ (recurrence.override_cadence if recurrence and recurrence.status == 'confirmed' else none)|tojson }})">Modifica</button></td>
+            <td><button class="icon-button" type="button" title="Modifica" onclick='openEdit({{ tx.id }}, {{ tx.category|tojson }}, {{ 'true' if tx.excluded_from_analytics else 'false' }}, {{ (recurrence.override_cadence if recurrence and recurrence.status == 'confirmed' else none)|tojson }})'>Modifica</button></td>
           </tr>
         {% endfor %}
         </tbody>
