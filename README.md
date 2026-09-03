@@ -390,6 +390,7 @@ The PDF registry auto-detects supported statements before falling back to the ge
 - **Numia / Carta BCC** — purchase date + posting date statements, including the current table-based Credit MC layout and multiline FX rows. Values are retained in the application's accounting convention (`expense < 0`, `income/refund > 0`).
 - **BPER** — monthly statements with explicit `D/A` sign columns and the current Relax Banking `Contabilizzato` table layout, preserving the signed amount printed by the bank.
 - **PayPal** — transaction history grouped by currency; PayPal transaction IDs are retained in the description/raw audit data.
+- **PayPal CSV** — the Italian transaction-history export is auto-detected and imports the net amount, currency, transaction ID and counterparty when present. Prefer this format to PDF whenever it is available.
 - **Satispay** — transaction lists with Italian month names and Satispay UUIDs, including PDF exports where the euro glyph is encoded as a replacement character; bank funding and savings/investment-pocket movements are treated as internal transfers.
 
 ### Safety-first parsing

@@ -6,6 +6,7 @@ from app.services.importers.bbva_pdf_importer import BbvaPdfImporter
 from app.services.importers.bper_pdf_importer import BperPdfImporter
 from app.services.importers.csv_importer import CsvImporter
 from app.services.importers.numia_pdf_importer import NumiaCardPdfImporter
+from app.services.importers.paypal_csv_importer import PaypalCsvImporter
 from app.services.importers.paypal_pdf_importer import PaypalPdfImporter
 from app.services.importers.pdf_importer import PdfImporter
 from app.services.importers.pdf_utils import extract_pdf_text
@@ -25,6 +26,8 @@ PDF_IMPORTERS = (
 def get_importer(path: Path) -> StatementImporter:
     suffix = path.suffix.lower()
     if suffix == ".csv":
+        if PaypalCsvImporter.matches(path):
+            return PaypalCsvImporter()
         return CsvImporter()
     if suffix in {".xlsx", ".xlsm"}:
         return XlsxImporter()

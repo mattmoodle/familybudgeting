@@ -5,6 +5,8 @@ from app.services.importers.bbva_pdf_importer import BbvaPdfImporter
 from app.services.importers.bper_pdf_importer import BperPdfImporter
 from app.services.importers.numia_pdf_importer import NumiaCardPdfImporter
 from app.services.importers.paypal_pdf_importer import PaypalPdfImporter
+from app.services.importers.paypal_csv_importer import PaypalCsvImporter
+from app.services.importers.registry import get_importer
 from app.services.importers.satispay_pdf_importer import SatispayPdfImporter
 
 
@@ -42,6 +44,21 @@ def test_paypal_rows_keep_transaction_ids_and_currency():
     assert "TESTPAYPAL000001" in rows[0].description
     assert rows[1].amount == Decimal("40.68")
     assert rows[2].currency == "USD"
+
+
+def test_paypal_csv_keeps_net_amount_currency_and_transaction_id(tmp_path):
+    path = tmp_path / "paypal-export.csv"
+    path.write_text(
+        '"Data","Ora","Descrizione","Valuta","Lordo ","Tariffa ","Netto","Codice transazione","Nome"\n'
+        '"7/07/2026","10:30:00","Pagamento ricevuto","EUR","20,00","-0,80","19,20","TESTPAYPAL000001","Example Merchant"\n',
+        encoding="utf-8",
+    )
+    importer = get_importer(path)
+    assert isinstance(importer, PaypalCsvImporter)
+    row = importer.parse(path)[0]
+    assert row.amount == Decimal("19.20")
+    assert row.currency == "EUR"
+    assert "TESTPAYPAL000001" in row.description
 
 
 def test_satispay_transaction_amount_is_first_amount():
