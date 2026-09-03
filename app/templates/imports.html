@@ -19,20 +19,24 @@
     {% if batches %}
     <div class="table-wrap"><table><thead><tr><th>Documento</th><th>Conto</th><th>Importato il</th><th>Modalità</th><th>Stato</th><th>Righe</th><th></th></tr></thead><tbody>
     {% for batch in batches %}
-      <tr data-batch-id="{{ batch.id }}"><td><strong>{{ batch.source_filename }}</strong></td><td>{{ accounts.get(batch.account_id, 'Non disponibile') }}</td><td>{{ batch.created_at.strftime('%d/%m/%Y %H:%M') }}</td><td>{{ 'Human-check' if batch.import_mode == 'human-check' else 'Standard' }}</td><td><span class="pill {% if batch.status == 'completed' %}ok{% elif batch.status == 'failed' %}warn{% else %}neutral{% endif %}">{{ batch.status }}</span></td><td>{{ batch.imported_rows }} importate · {{ batch.skipped_rows }} saltate</td><td class="actions">{% if batch.import_mode == 'human-check' and batch.status != 'completed' %}<a class="button secondary" href="/human-check/{{ batch.id }}">Apri revisione</a>{% endif %}<button type="button" class="button danger" onclick="deleteImport({{ batch.id }}, {{ batch.source_filename | tojson }})">Elimina import</button></td></tr>
+      <tr data-batch-id="{{ batch.id }}"><td><strong>{{ batch.source_filename }}</strong></td><td>{{ accounts.get(batch.account_id, 'Non disponibile') }}</td><td>{{ batch.created_at.strftime('%d/%m/%Y %H:%M') }}</td><td>{{ 'Human-check' if batch.import_mode == 'human-check' else 'Standard' }}</td><td><span class="pill {% if batch.status == 'completed' %}ok{% elif batch.status == 'failed' %}warn{% else %}neutral{% endif %}">{{ batch.status }}</span></td><td>{{ batch.imported_rows }} importate · {{ batch.skipped_rows }} saltate</td><td class="actions">{% if batch.import_mode == 'human-check' and batch.status != 'completed' %}<a class="button secondary" href="/human-check/{{ batch.id }}">Apri revisione</a>{% endif %}<button type="button" class="button danger" data-delete-import data-batch-id="{{ batch.id }}" data-filename="{{ batch.source_filename }}">Elimina import</button></td></tr>
     {% endfor %}
     </tbody></table></div>
     {% else %}<p class="muted empty">Non hai ancora importato documenti.</p>{% endif %}
   </section>
 </main>
 <script>
-async function deleteImport(batchId, filename) {
+async function deleteImport(batchId, filename, button) {
   if (!confirm(`Eliminare definitivamente l'import "${filename}"? Verranno rimossi il file archiviato, le righe in revisione e tutte le transazioni create da questo import. Le regole e le categorie locali resteranno.`)) return;
+  button.disabled = true;
   const response = await fetch(`/api/imports/${batchId}`, {method: 'DELETE'});
   const data = await response.json();
-  if (!response.ok) { alert(data.detail || 'Impossibile eliminare l’import.'); return; }
+  if (!response.ok) { button.disabled = false; alert(data.detail || 'Impossibile eliminare l’import.'); return; }
   document.querySelector(`[data-batch-id="${batchId}"]`)?.remove();
 }
+document.querySelectorAll('[data-delete-import]').forEach((button) => {
+  button.addEventListener('click', () => deleteImport(button.dataset.batchId, button.dataset.filename, button));
+});
 </script>
 </body>
 </html>
