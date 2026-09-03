@@ -33,6 +33,8 @@ def ensure_schema_compatibility(engine: Engine) -> None:
             )
         if "is_suspicious" not in columns:
             statements.append("ALTER TABLE transactions ADD COLUMN is_suspicious BOOLEAN NOT NULL DEFAULT 0")
+        if "review_completed" not in columns:
+            statements.append("ALTER TABLE transactions ADD COLUMN review_completed BOOLEAN NOT NULL DEFAULT 0")
         statements.append(
             "CREATE INDEX IF NOT EXISTS ix_transactions_merchant ON transactions (merchant)"
         )

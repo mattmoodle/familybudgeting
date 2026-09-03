@@ -259,7 +259,7 @@
             <select class="category-select" data-tx="{{ tx.id }}">{% for c in categories %}<option value="{{ c.name }}" {% if tx.category == c.name %}selected{% endif %}>{{ c.name }}</option>{% endfor %}</select>
             <button type="button" class="icon-button" onclick="addReviewCategory({{ tx.id }})">+ Categoria</button>
             <label class="check"><input type="checkbox" class="learn-rule" data-tx="{{ tx.id }}" checked> ricorda regola</label>
-            <button type="button" onclick="saveCategory({{ tx.id }})">Salva</button>
+            <button type="button" onclick="saveCategory({{ tx.id }},this)">Salva</button><small class="review-save-status" id="review-status-{{ tx.id }}"></small>
           </div>
         </article>
         {% endfor %}
@@ -389,11 +389,11 @@ async function restartApp(){
   setTimeout(()=>location.reload(),2200);
 }
 
-async function saveCategory(id){
+async function saveCategory(id,button){
   const category=document.querySelector(`.category-select[data-tx="${id}"]`).value;
   const create_rule=document.querySelector(`.learn-rule[data-tx="${id}"]`).checked;
-  const r=await fetch(`/api/transactions/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({category,create_rule})});
-  if(r.ok){document.getElementById(`review-${id}`).remove(); const label=document.querySelector(`#tx-${id} .category-label`); if(label) label.textContent=category;} else alert('Impossibile salvare la correzione');
+  const status=document.getElementById(`review-status-${id}`);button.disabled=true;status.textContent='Salvataggio…';
+  try{const r=await fetch(`/api/transactions/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({category,create_rule,review_completed:true})});const data=await r.json();if(!r.ok)throw new Error(data.detail||'Impossibile salvare la revisione.');document.getElementById(`review-${id}`).remove();const label=document.querySelector(`#tx-${id} .category-label`);if(label)label.textContent=category;}catch(error){button.disabled=false;status.textContent=error.message||'Impossibile salvare la revisione.';}
 }
 async function acceptSuspicion(id){const r=await fetch(`/api/transactions/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({is_suspicious:false})});if(r.ok){document.getElementById(`suspicious-${id}`).remove();}else alert('Impossibile aggiornare la spesa sospetta.');}
 async function addReviewCategory(id){

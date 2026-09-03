@@ -59,4 +59,7 @@ def test_dashboard_filters_and_review_queue():
 
         review = review_queue(db)
         assert [item.description for item in review] == ["Mystery"]
+        review[0].review_completed = True
+        db.commit()
+        assert review_queue(db) == []
         assert [item.description for item in suspicious_queue(db)] == ["Mortgage"]

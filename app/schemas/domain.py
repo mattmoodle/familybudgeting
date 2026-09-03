@@ -33,6 +33,7 @@ class TransactionPatch(BaseModel):
     manual_note: str | None = None
     create_rule: bool = False
     is_suspicious: bool | None = None
+    review_completed: bool | None = None
     is_recurring: bool | None = None
     recurrence_cadence: str | None = Field(default=None, pattern=r"^(weekly|biweekly|monthly|bimonthly|quarterly|semiannual|annual)$")
 
@@ -51,6 +52,7 @@ class TransactionRead(BaseModel):
     excluded_from_analytics: bool
     account_id: int
     is_suspicious: bool
+    review_completed: bool
 
 
 class ImportResult(BaseModel):

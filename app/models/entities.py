@@ -97,6 +97,7 @@ class Transaction(Base):
     transfer_pair_id: Mapped[int | None] = mapped_column(ForeignKey("transactions.id"), nullable=True)
     excluded_from_analytics: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     is_suspicious: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    review_completed: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     manual_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     raw_data: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

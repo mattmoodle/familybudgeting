@@ -104,6 +104,7 @@ def review_queue(db: Session, limit: int = 30) -> list[Transaction]:
             Transaction.is_duplicate.is_(False),
             Transaction.is_internal_transfer.is_(False),
             Transaction.excluded_from_analytics.is_(False),
+            Transaction.review_completed.is_(False),
             ((Transaction.category == "Uncategorized") | (Transaction.category_confidence < Decimal("0.75"))),
         )
         .order_by(Transaction.booked_on.desc(), Transaction.id.desc())

@@ -263,7 +263,7 @@ def patch_transaction(transaction_id: int, payload: TransactionPatch, db: Sessio
         tx.category = payload.category
         tx.category_confidence = 1
         tx.category_source = "manual"
-        if payload.create_rule:
+        if payload.create_rule and payload.category != "Uncategorized":
             pattern = normalize_description(tx.description)
             pattern = " ".join(pattern.split()[:4])
             if pattern and not db.scalar(select(Rule).where(Rule.pattern == pattern, Rule.category == payload.category)):
@@ -274,6 +274,8 @@ def patch_transaction(transaction_id: int, payload: TransactionPatch, db: Sessio
         tx.manual_note = payload.manual_note
     if payload.is_suspicious is not None:
         tx.is_suspicious = payload.is_suspicious
+    if payload.review_completed is not None:
+        tx.review_completed = payload.review_completed
     if payload.is_recurring is not None:
         pattern_key = f"manual:transaction:{tx.id}"
         if payload.is_recurring:
