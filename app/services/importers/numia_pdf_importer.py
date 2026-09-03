@@ -11,15 +11,17 @@ TX_START = re.compile(r"(?m)^\s*(?P<purchase>\d{2}/\d{2}/\d{4})\s+(?P<booked>\d{
 AMOUNT_AT_END = re.compile(r"(?P<amount>-?[\d.]+,\d{2})\s*$")
 FOREIGN_AMOUNT = re.compile(r"\b[\d.]+(?:,\d+)?\s+(?:USD|JPY|GBP|CHF)\b", re.I)
 CURRENT_ROW = re.compile(
-    r"(?P<purchase>\d{2}/\d{2}/\d{4})\s+"
+    r"^\s*(?P<purchase>\d{2}/\d{2}/\d{4})\s+"
     r"(?P<booked>\d{2}/\d{2}/\d{4})\s+"
     r"(?P<body>.*?)\s+"
     r"(?P<original>-?[\d.]+(?:,\d{2})?)\s+"
     r"(?P<amount>-?[\d.]+(?:,\d{2})?)\s+"
     r"(?P<commission>-?[\d.]+(?:,\d{2})?)\s+"
     r"(?P<currency>[A-Z]{3})",
-    re.S,
+    re.I,
 )
+TIME_CONTINUATION = re.compile(r"^\s*\d{2}:\d{2}:\d{2}\s*(?P<body>.*)$")
+ROW_START = re.compile(r"^\s*\d{2}/\d{2}/\d{4}\s+\d{2}/\d{2}/\d{4}\b")
 
 
 class NumiaCardPdfImporter(StatementImporter):
@@ -91,13 +93,31 @@ class NumiaCardPdfImporter(StatementImporter):
     @staticmethod
     def _parse_current_layout(text: str) -> list[ImportedRow]:
         rows: list[ImportedRow] = []
-        for match in CURRENT_ROW.finditer(text):
+        lines = text.splitlines()
+        i = 0
+        while i < len(lines):
+            match = CURRENT_ROW.match(lines[i])
+            if not match:
+                i += 1
+                continue
             purchase = parse_date(match.group("purchase"))
             booked = parse_date(match.group("booked"))
             amount = parse_amount(match.group("amount"))
             if not purchase or not booked or amount is None:
+                i += 1
                 continue
             description = re.sub(r"\s+", " ", match.group("body")).strip()
+            continuation_parts: list[str] = []
+            j = i + 1
+            while j < len(lines) and not ROW_START.match(lines[j]):
+                continuation = TIME_CONTINUATION.match(lines[j])
+                if continuation and continuation.group("body").strip():
+                    continuation_parts.append(continuation.group("body").strip())
+                j += 1
+            if continuation_parts:
+                description = f"{description} {' '.join(continuation_parts)}".strip()
             if description and not description.upper().startswith(("IMPORTO", "TOTALE")):
-                rows.append(ImportedRow(booked, description, amount, value_on=purchase, raw_data=match.group(0)))
+                raw_data = "\n".join(lines[i:j])
+                rows.append(ImportedRow(booked, description, amount, value_on=purchase, raw_data=raw_data))
+            i = max(i + 1, j)
         return rows

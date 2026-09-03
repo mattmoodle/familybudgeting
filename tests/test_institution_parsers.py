@@ -98,15 +98,16 @@ def test_numia_current_layout_has_purchase_and_posting_dates():
     Credit MC
     Lista Movimenti
     Data registrazione Data acquisto Importo originale Valuta Commissioni Importo EURO
-    31/08/2026 01/09/2026 EXAMPLE SHOP ROMA ITA -2.50 -2.50 0.00 EUR
-    09:26:18
-    30/08/2026 31/08/2026 EXAMPLE DIGITAL SERVICE IRL -9.99 -9.99 0.00 EUR
-    11:14:11
+    31/08/2026 01/09/2026 EXAMPLE SHOP ROMA -2.50 -2.50 0.00 EUR
+    09:26:18 ITA
+    30/08/2026 31/08/2026 EXAMPLE DIGITAL SERVICE -9.99 -9.99 0.00 EUR
+    11:14:11 IRL
     """
     rows = NumiaCardPdfImporter().parse_text(text)
     assert [row.amount for row in rows] == [Decimal("-2.50"), Decimal("-9.99")]
     assert rows[0].booked_on.isoformat() == "2026-09-01"
     assert rows[0].value_on.isoformat() == "2026-08-31"
+    assert rows[0].description == "EXAMPLE SHOP ROMA ITA"
 
 
 def test_bcc_movimenti_globali_signed_amounts():
