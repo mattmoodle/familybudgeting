@@ -110,6 +110,13 @@ def home(
     q: str | None = None,
     amount_type: str | None = None,
     transaction_state: str | None = None,
+    recurrence_q: str | None = None,
+    recurrence_category: str | None = None,
+    recurrence_cadence: str | None = None,
+    recurrence_type: str | None = None,
+    recurrence_status: str | None = None,
+    recurrence_sort: str | None = None,
+    recurrence_direction: str | None = None,
     page: str | None = None,
     per_page: str | None = None,
     budget_month: str | None = None,
@@ -177,6 +184,19 @@ def home(
         .offset((selected_page - 1) * selected_per_page)
         .limit(selected_per_page)
     ).all()
+    recurring_all = detect_recurring_patterns(db, start_date, end_date, selected_account_id, category)
+    recurrence_search = (recurrence_q or "").strip().casefold()
+    recurrence_display = [
+        item for item in recurring_all
+        if (not recurrence_search or recurrence_search in item.merchant.casefold())
+        and (not recurrence_category or item.category == recurrence_category)
+        and (not recurrence_cadence or item.cadence == recurrence_cadence)
+        and (not recurrence_type or item.cost_type == recurrence_type)
+        and (not recurrence_status or item.management_status == recurrence_status)
+    ]
+    recurrence_sort_key = recurrence_sort if recurrence_sort in {"merchant", "category", "cadence", "cost_type", "average_amount", "occurrences", "next_expected", "management_status"} else "next_expected"
+    recurrence_descending = recurrence_direction == "desc"
+    recurrence_display.sort(key=lambda item: getattr(item, recurrence_sort_key), reverse=recurrence_descending)
     transaction_recurrences: dict[int, RecurrenceOverride] = {}
     for override in db.scalars(select(RecurrenceOverride).where(RecurrenceOverride.pattern_key.like("manual:transaction:%"))).all():
         suffix = override.pattern_key.rsplit(":", 1)[-1]
@@ -200,7 +220,8 @@ def home(
             "cashflow": [{"month": x["month"], "income": float(x["income"]), "expenses": float(x["expenses"]), "net": float(x["net"])} for x in monthly_cashflow(db, start_date, end_date, selected_account_id, category)],
             "filters": {"start": start_date, "end": end_date, "account_id": selected_account_id, "category": category, "q": search_term, "amount_type": amount_type or "", "transaction_state": transaction_state or "", "per_page": selected_per_page},
             "pagination": {"page": selected_page, "per_page": selected_per_page, "total": transaction_total, "total_pages": total_pages},
-            "recurring": detect_recurring_patterns(db, start_date, end_date, selected_account_id, category),
+            "recurring": recurrence_display,
+            "recurrence_filters": {"q": recurrence_q, "category": recurrence_category or "", "cadence": recurrence_cadence or "", "type": recurrence_type or "", "status": recurrence_status or "", "sort": recurrence_sort_key, "direction": "desc" if recurrence_descending else "asc"},
             "forecast": forecast_recurring_expenses(db, 60, start=start_date, end=end_date, account_id=selected_account_id, category=category)[:12],
             "cost_structure": cost_structure(db, start_date, end_date, selected_account_id, category),
             "budget_report": budget_report,

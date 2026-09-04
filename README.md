@@ -4,7 +4,7 @@
 
 ## Navigation
 
-The interface is organized into dedicated pages accessible from the top menu: **Panoramica**, **Budget**, **Transazioni**, **Da verificare**, **Ricorrenze**, **Analisi**, and **Documenti**. This keeps focused workflows separate while preserving the same local SQLite data and offline operation.
+The interface is organized into dedicated pages accessible from the top menu: **Panoramica**, **Budget**, **Transazioni**, **Da verificare**, **Ricorrenze**, **Analisi**, and **Documenti**. This keeps focused workflows separate while preserving the same local SQLite data and offline operation. The **Ricorrenze** page supports filters by merchant, category, cadence, type and status; click a column header to sort the visible recurrences.
 
 ## Supported statement formats
 
