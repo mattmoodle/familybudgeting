@@ -32,11 +32,17 @@
     </nav>
 
     <section class="panel filters-panel">
-      <form method="get" class="filters">
+      <form method="get" class="filters {% if active_page == 'transactions' %}transaction-filters{% endif %}">
         <div><label>Dal</label><input type="date" name="start" value="{{ filters.start or '' }}"></div>
         <div><label>Al</label><input type="date" name="end" value="{{ filters.end or '' }}"></div>
         <div><label>Conto</label><select name="account_id"><option value="">Tutti</option>{% for account in accounts %}<option value="{{ account.id }}" {% if filters.account_id == account.id %}selected{% endif %}>{{ account.name }}</option>{% endfor %}</select></div>
         <div><label>Categoria</label><select name="category"><option value="">Tutte</option>{% for c in categories %}<option value="{{ c.name }}" {% if filters.category == c.name %}selected{% endif %}>{{ c.name }}</option>{% endfor %}</select></div>
+        {% if active_page == 'transactions' %}
+        <div><label>Cerca</label><input type="search" name="q" value="{{ filters.q }}" placeholder="Descrizione, merchant, nota"></div>
+        <div><label>Importo</label><select name="amount_type"><option value="">Tutti</option><option value="expenses" {% if filters.amount_type == 'expenses' %}selected{% endif %}>Solo spese</option><option value="income" {% if filters.amount_type == 'income' %}selected{% endif %}>Solo entrate</option></select></div>
+        <div><label>Stato</label><select name="transaction_state"><option value="">Tutti</option><option value="counted" {% if filters.transaction_state == 'counted' %}selected{% endif %}>Conteggiate</option><option value="excluded" {% if filters.transaction_state == 'excluded' %}selected{% endif %}>Escluse</option><option value="internal" {% if filters.transaction_state == 'internal' %}selected{% endif %}>Trasferimenti</option><option value="duplicate" {% if filters.transaction_state == 'duplicate' %}selected{% endif %}>Duplicate</option><option value="suspicious" {% if filters.transaction_state == 'suspicious' %}selected{% endif %}>Sospette</option></select></div>
+        <div><label>Per pagina</label><select name="per_page"><option value="20" {% if filters.per_page == 20 %}selected{% endif %}>20</option><option value="50" {% if filters.per_page == 50 %}selected{% endif %}>50</option><option value="100" {% if filters.per_page == 100 %}selected{% endif %}>100</option></select></div>
+        {% endif %}
         <div class="filter-actions"><button type="submit">Applica</button><a class="button secondary" href="{{ request.url.path }}">Reset</a></div>
       </form>
     </section>
@@ -283,13 +289,21 @@
 
     {% if active_page == 'transactions' %}
     <section class="panel">
-      <div class="panel-heading"><div><h2>Transazioni</h2><p class="muted small">Ultime 100 righe che rispettano i filtri in alto.</p></div></div>
+      <div class="panel-heading"><div><h2>Transazioni</h2><p class="muted small">{{ pagination.total }} risultati · pagina {{ pagination.page }} di {{ pagination.total_pages }}.</p></div></div>
+      {% if recent %}
+      <div class="bulk-toolbar">
+        <strong><span id="bulk-selected-count">0</span> selezionate</strong>
+        <select id="bulk-action" aria-label="Operazione multipla"><option value="">Scegli operazione…</option><option value="category">Cambia categoria</option><option value="exclude">Escludi dalle analisi</option><option value="include">Includi nelle analisi</option><option value="mark_suspicious">Segnala come sospette</option><option value="clear_suspicious">Rimuovi segnalazione sospetta</option></select>
+        <select id="bulk-category" aria-label="Categoria per l'operazione multipla" disabled><option value="">Categoria…</option>{% for c in categories %}<option value="{{ c.name }}">{{ c.name }}</option>{% endfor %}</select>
+        <button type="button" id="bulk-apply" disabled>Applica alle selezionate</button>
+        <span id="bulk-status" class="muted small" role="status"></span>
+      </div>
       <div class="table-wrap"><table>
-        <thead><tr><th>Data</th><th>Descrizione</th><th>Categoria</th><th>Importo</th><th>Stato</th><th></th></tr></thead>
+        <thead><tr><th><input type="checkbox" id="select-page" aria-label="Seleziona tutte le righe di questa pagina"></th><th>Data</th><th>Conto</th><th>Descrizione</th><th>Categoria</th><th>Importo</th><th>Stato</th><th></th></tr></thead>
         <tbody>
         {% for tx in recent %}
           <tr id="tx-{{ tx.id }}" class="{% if tx.excluded_from_analytics %}excluded-row{% endif %}">
-            <td>{{ tx.booked_on }}</td><td class="description-cell">{{ tx.description }}</td><td><span class="category-label">{{ tx.category }}</span></td>
+            <td><input type="checkbox" class="transaction-select" value="{{ tx.id }}" aria-label="Seleziona transazione del {{ tx.booked_on }}"></td><td>{{ tx.booked_on }}</td><td>{{ tx.account.name }}</td><td class="description-cell">{{ tx.description }}</td><td><span class="category-label">{{ tx.category }}</span></td>
             <td class="number {% if tx.amount < 0 %}negative{% else %}positive{% endif %}">€{{ '%.2f'|format(tx.amount) }}</td>
             <td>{% if tx.is_suspicious %}<span class="pill warn">sospetta · conteggiata</span>{% elif tx.is_duplicate %}<span class="pill warn">duplicato</span>{% elif tx.is_internal_transfer %}<span class="pill neutral">trasferimento</span>{% elif tx.excluded_from_analytics %}<span class="pill neutral">escluso</span>{% else %}<span class="pill ok">conteggiato</span>{% endif %}</td>
             {% set recurrence = transaction_recurrences.get(tx.id) %}
@@ -298,6 +312,12 @@
         {% endfor %}
         </tbody>
       </table></div>
+      <nav class="pagination" aria-label="Paginazione transazioni">
+        {% if pagination.page > 1 %}<a class="button secondary" href="{{ request.url.include_query_params(page=pagination.page - 1) }}">← Precedente</a>{% endif %}
+        <span>Pagina {{ pagination.page }} di {{ pagination.total_pages }}</span>
+        {% if pagination.page < pagination.total_pages %}<a class="button secondary" href="{{ request.url.include_query_params(page=pagination.page + 1) }}">Successiva →</a>{% endif %}
+      </nav>
+      {% else %}<p class="muted empty">Nessuna transazione corrisponde ai filtri selezionati.</p>{% endif %}
     </section>
     {% endif %}
     {% if active_page == 'overview' %}
@@ -414,6 +434,12 @@ function openEdit(id,category,excluded,recurrenceCadence){document.getElementByI
 
 document.getElementById('edit-recurring').addEventListener('change',e=>document.getElementById('edit-recurrence-cadence').disabled=!e.target.checked);
 document.getElementById('edit-form').addEventListener('submit',async e=>{e.preventDefault();const id=document.getElementById('edit-id').value,recurring=document.getElementById('edit-recurring').checked;const body={category:document.getElementById('edit-category').value,create_rule:document.getElementById('edit-create-rule').checked,excluded_from_analytics:document.getElementById('edit-excluded').checked,manual_note:document.getElementById('edit-note').value,is_recurring:recurring,recurrence_cadence:recurring?document.getElementById('edit-recurrence-cadence').value:null};const r=await fetch(`/api/transactions/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(r.ok){location.reload()}else{const data=await r.json();document.getElementById('edit-status').textContent=data.detail||'Errore durante il salvataggio.';}});
+
+const selectPage=document.getElementById('select-page'), bulkAction=document.getElementById('bulk-action'), bulkCategory=document.getElementById('bulk-category'), bulkApply=document.getElementById('bulk-apply');
+function selectedTransactions(){return [...document.querySelectorAll('.transaction-select:checked')];}
+function refreshBulkControls(){const count=selectedTransactions().length;const needsCategory=bulkAction?.value==='category';if(bulkCategory)bulkCategory.disabled=!needsCategory;if(bulkApply)bulkApply.disabled=!count||!bulkAction?.value||(needsCategory&&!bulkCategory.value);const countLabel=document.getElementById('bulk-selected-count');if(countLabel)countLabel.textContent=count;}
+if(selectPage){selectPage.addEventListener('change',()=>{document.querySelectorAll('.transaction-select').forEach(box=>box.checked=selectPage.checked);refreshBulkControls();});document.querySelectorAll('.transaction-select').forEach(box=>box.addEventListener('change',()=>{selectPage.checked=selectedTransactions().length===document.querySelectorAll('.transaction-select').length;refreshBulkControls();}));}
+if(bulkAction){bulkAction.addEventListener('change',refreshBulkControls);bulkCategory.addEventListener('change',refreshBulkControls);bulkApply.addEventListener('click',async()=>{const ids=selectedTransactions().map(box=>Number(box.value));const action=bulkAction.value,status=document.getElementById('bulk-status');const body={transaction_ids:ids};if(action==='category')body.category=bulkCategory.value;if(action==='exclude')body.excluded_from_analytics=true;if(action==='include')body.excluded_from_analytics=false;if(action==='mark_suspicious')body.is_suspicious=true;if(action==='clear_suspicious')body.is_suspicious=false;if(!confirm(`Applicare l’operazione a ${ids.length} transazioni selezionate?`))return;bulkApply.disabled=true;status.textContent='Aggiornamento…';try{const response=await fetch('/api/transactions/bulk-update',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const data=await response.json();if(!response.ok)throw new Error(data.detail||'Aggiornamento non riuscito.');status.textContent=`Aggiornate ${data.updated} transazioni.`;setTimeout(()=>location.reload(),350);}catch(error){status.textContent=error.message||'Aggiornamento non riuscito.';refreshBulkControls();}});}
 
 async function saveBudget(button, category){
   const row=button.closest('tr');

@@ -38,6 +38,13 @@ class TransactionPatch(BaseModel):
     recurrence_cadence: str | None = Field(default=None, pattern=r"^(weekly|biweekly|monthly|bimonthly|quarterly|semiannual|annual)$")
 
 
+class TransactionBulkPatch(BaseModel):
+    transaction_ids: list[int] = Field(min_length=1, max_length=500)
+    category: str | None = Field(default=None, min_length=1, max_length=80)
+    excluded_from_analytics: bool | None = None
+    is_suspicious: bool | None = None
+
+
 class TransactionRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int

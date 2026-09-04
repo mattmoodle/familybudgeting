@@ -5,7 +5,7 @@ from tempfile import NamedTemporaryFile
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.db.session import engine, get_db
@@ -40,6 +40,7 @@ from app.schemas.domain import (
     RecurringPatternRead,
     SavingSuggestion,
     TransactionPatch,
+    TransactionBulkPatch,
     TransactionRead,
 )
 from app.services.analytics import (
@@ -105,6 +106,11 @@ def home(
     end: str | None = None,
     account_id: str | None = None,
     category: str | None = None,
+    q: str | None = None,
+    amount_type: str | None = None,
+    transaction_state: str | None = None,
+    page: str | None = None,
+    per_page: str | None = None,
     budget_month: str | None = None,
     db: Session = Depends(get_db),
 ):
@@ -118,6 +124,12 @@ def home(
     }.get(request.url.path, "overview")
     start_date, end_date = optional_date(start), optional_date(end)
     selected_account_id = optional_int(account_id, "account_id")
+    selected_page = optional_int(page, "page") or 1
+    selected_per_page = optional_int(per_page, "per_page") or 50
+    if selected_page < 1:
+        raise HTTPException(422, "page must be positive")
+    if selected_per_page not in {20, 50, 100}:
+        raise HTTPException(422, "per_page must be 20, 50, or 100")
     summary = dashboard_summary(db, start_date, end_date, selected_account_id, category)
     accounts = db.scalars(select(Account).where(Account.active.is_(True)).order_by(Account.name)).all()
     categories = db.scalars(select(Category).order_by(Category.name)).all()
@@ -137,7 +149,33 @@ def home(
         tx_stmt = tx_stmt.where(Transaction.account_id == selected_account_id)
     if category:
         tx_stmt = tx_stmt.where(Transaction.category == category)
-    recent = db.scalars(tx_stmt.order_by(Transaction.booked_on.desc(), Transaction.id.desc()).limit(100)).all()
+    search_term = (q or "").strip()
+    if search_term:
+        pattern = f"%{search_term}%"
+        tx_stmt = tx_stmt.where(or_(Transaction.description.ilike(pattern), Transaction.merchant.ilike(pattern), Transaction.manual_note.ilike(pattern)))
+    if amount_type == "expenses":
+        tx_stmt = tx_stmt.where(Transaction.amount < 0)
+    elif amount_type == "income":
+        tx_stmt = tx_stmt.where(Transaction.amount > 0)
+    if transaction_state == "counted":
+        tx_stmt = tx_stmt.where(Transaction.excluded_from_analytics.is_(False), Transaction.is_internal_transfer.is_(False), Transaction.is_duplicate.is_(False))
+    elif transaction_state == "excluded":
+        tx_stmt = tx_stmt.where(Transaction.excluded_from_analytics.is_(True))
+    elif transaction_state == "internal":
+        tx_stmt = tx_stmt.where(Transaction.is_internal_transfer.is_(True))
+    elif transaction_state == "duplicate":
+        tx_stmt = tx_stmt.where(Transaction.is_duplicate.is_(True))
+    elif transaction_state == "suspicious":
+        tx_stmt = tx_stmt.where(Transaction.is_suspicious.is_(True))
+    transaction_total = db.scalar(select(func.count()).select_from(tx_stmt.subquery())) or 0
+    total_pages = max(1, (transaction_total + selected_per_page - 1) // selected_per_page)
+    if selected_page > total_pages:
+        selected_page = total_pages
+    recent = db.scalars(
+        tx_stmt.order_by(Transaction.booked_on.desc(), Transaction.id.desc())
+        .offset((selected_page - 1) * selected_per_page)
+        .limit(selected_per_page)
+    ).all()
     transaction_recurrences: dict[int, RecurrenceOverride] = {}
     for override in db.scalars(select(RecurrenceOverride).where(RecurrenceOverride.pattern_key.like("manual:transaction:%"))).all():
         suffix = override.pattern_key.rsplit(":", 1)[-1]
@@ -159,7 +197,8 @@ def home(
             "suggestions": saving_suggestions(db, start_date, end_date, selected_account_id, category),
             "category_totals": [{"category": x["category"], "amount": float(x["amount"])} for x in category_totals(db, start_date, end_date, selected_account_id, category)],
             "cashflow": [{"month": x["month"], "income": float(x["income"]), "expenses": float(x["expenses"]), "net": float(x["net"])} for x in monthly_cashflow(db, start_date, end_date, selected_account_id, category)],
-            "filters": {"start": start_date, "end": end_date, "account_id": selected_account_id, "category": category},
+            "filters": {"start": start_date, "end": end_date, "account_id": selected_account_id, "category": category, "q": search_term, "amount_type": amount_type or "", "transaction_state": transaction_state or "", "per_page": selected_per_page},
+            "pagination": {"page": selected_page, "per_page": selected_per_page, "total": transaction_total, "total_pages": total_pages},
             "recurring": detect_recurring_patterns(db, start_date, end_date, selected_account_id, category),
             "forecast": forecast_recurring_expenses(db, 60, start=start_date, end=end_date, account_id=selected_account_id, category=category)[:12],
             "cost_structure": cost_structure(db, start_date, end_date, selected_account_id, category),
@@ -306,6 +345,22 @@ def patch_transaction(transaction_id: int, payload: TransactionPatch, db: Sessio
     db.commit()
     db.refresh(tx)
     return tx
+
+
+@router.patch("/api/transactions/bulk-update")
+def patch_transactions_bulk(payload: TransactionBulkPatch, db: Session = Depends(get_db)):
+    values: dict[str, object] = {}
+    if payload.category is not None:
+        values.update(category=payload.category, category_confidence=1, category_source="manual")
+    if payload.excluded_from_analytics is not None:
+        values["excluded_from_analytics"] = payload.excluded_from_analytics
+    if payload.is_suspicious is not None:
+        values["is_suspicious"] = payload.is_suspicious
+    if not values:
+        raise HTTPException(422, "Choose a bulk action")
+    result = db.execute(update(Transaction).where(Transaction.id.in_(payload.transaction_ids)).values(**values))
+    db.commit()
+    return {"updated": result.rowcount or 0}
 
 
 @router.get("/human-check/{batch_id}", response_class=HTMLResponse)
