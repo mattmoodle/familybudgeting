@@ -201,7 +201,7 @@
           {% for item in forecast %}
           <div class="forecast-row">
             <time>{{ item.expected_on.strftime('%d/%m') }}</time>
-            <div><a class="forecast-link" href="/transactions" onclick='openForecastDetails({{ item.merchant|tojson }}, {{ item.category|tojson }}, {{ item.cadence|tojson }}, {{ item.expected_on.isoformat()|tojson }}, {{ item.estimated_amount }});return false;'>{{ item.merchant }}</a><small>{{ item.category }} · {{ item.cadence }}</small></div>
+            <div><a class="forecast-link" href="/transactions" onclick='openForecastDetails({{ item.key|tojson }}, {{ item.display_name|tojson }}, {{ item.merchant|tojson }}, {{ item.category|tojson }}, {{ item.cadence|tojson }}, {{ item.expected_on.isoformat()|tojson }}, {{ item.estimated_amount }});return false;'>{{ item.display_name or item.merchant }}</a><small>{{ item.category }} · {{ item.cadence }}</small></div>
             <span>≈ €{{ '%.2f'|format(item.estimated_amount) }}</span>
           </div>
           {% endfor %}
@@ -241,7 +241,7 @@
           <tbody>
           {% for item in recurring %}
             <tr>
-              <td><strong>{{ item.merchant }}</strong>{% if item.manual_override %}<small class="manual-mark">controllo manuale</small>{% endif %}</td>
+              <td><strong>{{ item.display_name or item.merchant }}</strong>{% if item.display_name %}<small class="manual-mark">Originale: {{ item.merchant }}</small>{% endif %}{% if item.manual_override %}<small class="manual-mark">controllo manuale</small>{% endif %}</td>
               <td>{{ item.category }}</td>
               <td>{{ item.cadence }}</td>
               <td><span class="pill {% if item.cost_type == 'fixed' %}ok{% else %}neutral{% endif %}">{{ 'fisso' if item.cost_type == 'fixed' else 'variabile' }}</span></td>
@@ -249,7 +249,7 @@
               <td>{{ item.occurrences }}</td>
               <td>{{ item.next_expected.strftime('%d/%m/%Y') }}</td>
               <td>{% if item.management_status == 'confirmed' %}<span class="pill ok">confermata</span>{% elif item.management_status == 'paused' %}<span class="pill warn">sospesa</span>{% elif item.management_status == 'ended' %}<span class="pill neutral">terminata</span>{% else %}<span class="pill neutral">auto {{ '%.0f'|format(item.confidence * 100) }}%</span>{% endif %}</td>
-              <td><button type="button" class="icon-button" onclick='openRecurrence({{ item.key|tojson }}, {{ item.merchant|tojson }}, {{ item.category|tojson }}, {{ item.cadence|tojson }}, {{ item.average_amount }}, {{ item.next_expected.isoformat()|tojson }}, {{ item.management_status|tojson }}, {{ (item.note or "")|tojson }})'>Gestisci</button></td>
+              <td><button type="button" class="icon-button" onclick='openRecurrence({{ item.key|tojson }}, {{ item.merchant|tojson }}, {{ item.display_name|tojson }}, {{ item.category|tojson }}, {{ item.cadence|tojson }}, {{ item.average_amount }}, {{ item.next_expected.isoformat()|tojson }}, {{ item.management_status|tojson }}, {{ (item.note or "")|tojson }})'>Gestisci</button></td>
             </tr>
           {% endfor %}
           </tbody>
@@ -344,6 +344,7 @@
       <input type="hidden" name="merchant">
       <input type="hidden" name="category">
       <p id="recurrence-title" class="muted"></p>
+      <label>Nome visualizzato<input name="display_name" maxlength="180" placeholder="es. Audible"></label>
       <label>Stato</label>
       <select name="status"><option value="confirmed">Confermata</option><option value="paused">Sospesa temporaneamente</option><option value="ended">Terminata</option><option value="rejected">Non è una ricorrenza</option></select>
       <label>Frequenza</label>
@@ -391,7 +392,8 @@
   <dialog id="forecast-details-dialog">
     <div class="dialog-form">
       <div class="dialog-title"><h2>Dettaglio uscita prevista</h2><button type="button" class="close" onclick="this.closest('dialog').close()">×</button></div>
-      <dl class="forecast-details"><div><dt>Descrizione</dt><dd id="forecast-detail-merchant"></dd></div><div><dt>Data prevista</dt><dd id="forecast-detail-date"></dd></div><div><dt>Categoria</dt><dd id="forecast-detail-category"></dd></div><div><dt>Frequenza</dt><dd id="forecast-detail-cadence"></dd></div><div><dt>Importo stimato</dt><dd id="forecast-detail-amount"></dd></div></dl>
+      <dl class="forecast-details"><div><dt>Nome visualizzato</dt><dd id="forecast-detail-merchant"></dd></div><div><dt>Descrizione originale</dt><dd id="forecast-detail-original"></dd></div><div><dt>Data prevista</dt><dd id="forecast-detail-date"></dd></div><div><dt>Categoria</dt><dd id="forecast-detail-category"></dd></div><div><dt>Frequenza</dt><dd id="forecast-detail-cadence"></dd></div><div><dt>Importo stimato</dt><dd id="forecast-detail-amount"></dd></div></dl>
+      <div class="forecast-alias"><label>Nome visualizzato<input id="forecast-display-name" maxlength="180" placeholder="es. Audible"></label><button type="button" class="button secondary" onclick="saveForecastDisplayName()">Salva nome</button></div><p id="forecast-display-status" class="muted small" role="status"></p>
       <h3>Movimenti che supportano la previsione</h3>
       <div id="forecast-supporting-transactions" class="forecast-supporting"><p class="muted small">Caricamento…</p></div>
       <a id="forecast-open-transactions" class="button secondary" href="/transactions">Apri in Transazioni</a>
@@ -453,11 +455,13 @@ function reloadWithAppliedFilters(){const url=new URL(window.location.href);url.
 async function toggleBudgetCount(id,isCurrentlyCounted,button){const nextCounted=!isCurrentlyCounted;const message=nextCounted?'Includere questa transazione nel budget e nelle analisi?':'Non conteggiare questa transazione nel budget e nelle analisi? Rimarrà visibile come dettaglio.';if(!confirm(message))return;button.disabled=true;const response=await fetch(`/api/transactions/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({excluded_from_analytics:!nextCounted})});if(response.ok){reloadWithAppliedFilters()}else{button.disabled=false;const data=await response.json();alert(data.detail||'Impossibile aggiornare il conteggio del budget.');}}
 
 const cadenceLabels={weekly:'Settimanale',biweekly:'Bisettimanale',monthly:'Mensile',bimonthly:'Bimestrale',quarterly:'Trimestrale',semiannual:'Semestrale',annual:'Annuale'};
-async function openForecastDetails(merchant,category,cadence,expectedOn,amount){
+async function openForecastDetails(patternKey,displayName,merchant,category,cadence,expectedOn,amount){
   const dialog=document.getElementById('forecast-details-dialog'), list=document.getElementById('forecast-supporting-transactions');
-  document.getElementById('forecast-detail-merchant').textContent=merchant;document.getElementById('forecast-detail-date').textContent=new Date(`${expectedOn}T00:00:00`).toLocaleDateString('it-IT');document.getElementById('forecast-detail-category').textContent=category;document.getElementById('forecast-detail-cadence').textContent=cadenceLabels[cadence]||cadence;document.getElementById('forecast-detail-amount').textContent=`≈ ${euro(amount)}`;document.getElementById('forecast-open-transactions').href=`/transactions?${new URLSearchParams({q:merchant,category}).toString()}`;list.innerHTML='<p class="muted small">Caricamento…</p>';dialog.showModal();
-  try{const response=await fetch(`/api/recurrences/supporting-transactions?${new URLSearchParams({merchant,category})}`);const data=await response.json();if(!response.ok)throw new Error(data.detail||'Impossibile caricare i dettagli.');if(!data.transactions.length){list.innerHTML='<p class="muted small">Questa previsione è stata impostata manualmente o non ha ancora movimenti storici corrispondenti.</p>';return;}list.innerHTML=data.transactions.map(tx=>`<div class="forecast-support-row"><span>${new Date(`${tx.booked_on}T00:00:00`).toLocaleDateString('it-IT')}</span><div><strong>${tx.description}</strong><small>${tx.account}</small></div><b class="negative">${euro(tx.amount)}</b></div>`).join('');}catch(error){list.innerHTML=`<p class="muted small">${error.message||'Impossibile caricare i dettagli.'}</p>`;}
+  dialog.dataset.patternKey=patternKey;dialog.dataset.merchant=merchant;dialog.dataset.category=category;
+  document.getElementById('forecast-detail-merchant').textContent=displayName||merchant;document.getElementById('forecast-detail-original').textContent=merchant;document.getElementById('forecast-display-name').value=displayName||'';document.getElementById('forecast-display-status').textContent='';document.getElementById('forecast-detail-date').textContent=new Date(`${expectedOn}T00:00:00`).toLocaleDateString('it-IT');document.getElementById('forecast-detail-category').textContent=category;document.getElementById('forecast-detail-cadence').textContent=cadenceLabels[cadence]||cadence;document.getElementById('forecast-detail-amount').textContent=`≈ ${euro(amount)}`;document.getElementById('forecast-open-transactions').href=`/transactions?${new URLSearchParams({q:merchant,category}).toString()}`;list.innerHTML='<p class="muted small">Caricamento…</p>';dialog.showModal();
+  try{const response=await fetch(`/api/recurrences/supporting-transactions?${new URLSearchParams({merchant,category,pattern_key:patternKey})}`);const data=await response.json();if(!response.ok)throw new Error(data.detail||'Impossibile caricare i dettagli.');if(!data.transactions.length){list.innerHTML='<p class="muted small">Questa previsione è stata impostata manualmente o non ha ancora movimenti storici corrispondenti.</p>';return;}list.innerHTML=data.transactions.map(tx=>`<div class="forecast-support-row"><span>${new Date(`${tx.booked_on}T00:00:00`).toLocaleDateString('it-IT')}</span><div><strong>${tx.description}</strong><small>${tx.account}</small></div><b class="negative">${euro(tx.amount)}</b></div>`).join('');}catch(error){list.innerHTML=`<p class="muted small">${error.message||'Impossibile caricare i dettagli.'}</p>`;}
 }
+async function saveForecastDisplayName(){const dialog=document.getElementById('forecast-details-dialog'),input=document.getElementById('forecast-display-name'),status=document.getElementById('forecast-display-status');status.textContent='Salvataggio…';const payload={pattern_key:dialog.dataset.patternKey,merchant:dialog.dataset.merchant,category:dialog.dataset.category,status:'confirmed',display_name:input.value.trim()};const response=await fetch('/api/recurrences/override',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const data=await response.json();if(response.ok){status.textContent='Nome visualizzato salvato localmente.';setTimeout(()=>reloadWithAppliedFilters(),300)}else status.textContent=data.detail||'Impossibile salvare il nome.';}
 
 document.getElementById('edit-recurring').addEventListener('change',e=>document.getElementById('edit-recurrence-cadence').disabled=!e.target.checked);
 document.getElementById('edit-form').addEventListener('submit',async e=>{
@@ -505,11 +509,11 @@ const importForm=document.getElementById('import-form');if(importForm)importForm
 
 document.getElementById('account-form').addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(e.target);const status=document.getElementById('account-status');const r=await fetch('/api/accounts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:f.get('name'),account_type:f.get('account_type'),currency:'EUR'})});if(r.ok){location.reload()}else {const d=await r.json();status.textContent=d.detail||'Creazione non riuscita.';}});
 
-function openRecurrence(key,merchant,category,cadence,amount,nextExpected,status,note){
+function openRecurrence(key,merchant,displayName,category,cadence,amount,nextExpected,status,note){
   const d=document.getElementById('recurrence-dialog'), f=document.getElementById('recurrence-form');
   f.pattern_key.value=key; f.merchant.value=merchant; f.category.value=category;
   f.status.value=status==='auto'?'confirmed':status; f.override_cadence.value='';
-  f.override_amount.value=amount; f.override_next_expected.value=nextExpected; f.note.value=note||'';
+  f.display_name.value=displayName||''; f.override_amount.value=amount; f.override_next_expected.value=nextExpected; f.note.value=note||'';
   f.dataset.detectedCadence=cadence;
   document.getElementById('recurrence-title').textContent=`${merchant} · ${category} · rilevata ${cadence}`;
   document.getElementById('recurrence-status').textContent=''; d.showModal();
@@ -519,7 +523,7 @@ document.getElementById('manual-recurrence-form').addEventListener('submit',asyn
 
 document.getElementById('recurrence-form').addEventListener('submit',async e=>{
   e.preventDefault(); const f=e.currentTarget, status=document.getElementById('recurrence-status');
-  const payload={pattern_key:f.pattern_key.value,merchant:f.merchant.value,category:f.category.value,status:f.status.value,override_amount:f.override_amount.value?Number(f.override_amount.value):null,override_next_expected:f.override_next_expected.value||null,override_cadence:f.override_cadence.value||null,note:f.note.value||null};
+  const payload={pattern_key:f.pattern_key.value,merchant:f.merchant.value,category:f.category.value,status:f.status.value,display_name:f.display_name.value.trim(),override_amount:f.override_amount.value?Number(f.override_amount.value):null,override_next_expected:f.override_next_expected.value||null,override_cadence:f.override_cadence.value||null,note:f.note.value||null};
   const r=await fetch('/api/recurrences/override',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
   const data=await r.json(); if(r.ok){status.textContent='Ricorrenza aggiornata. Il forecast userà questa decisione.';setTimeout(()=>location.reload(),450)}else status.textContent=data.detail||'Salvataggio non riuscito.';
 });

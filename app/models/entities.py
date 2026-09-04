@@ -165,6 +165,7 @@ class RecurrenceOverride(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     pattern_key: Mapped[str] = mapped_column(String(300), unique=True, index=True)
     merchant: Mapped[str] = mapped_column(String(180), index=True)
+    display_name: Mapped[str | None] = mapped_column(String(180), nullable=True)
     category: Mapped[str] = mapped_column(String(80), index=True)
     status: Mapped[str] = mapped_column(String(20), default="confirmed", index=True)
     override_amount: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)

@@ -55,12 +55,15 @@ class RecurringPattern:
     management_status: str = "auto"
     manual_override: bool = False
     note: str | None = None
+    display_name: str | None = None
 
 
 @dataclass(frozen=True)
 class ForecastItem:
+    key: str
     expected_on: date
     merchant: str
+    display_name: str | None
     category: str
     estimated_amount: Decimal
     cadence: str
@@ -101,7 +104,8 @@ def _canonical_days_for_cadence(cadence: str) -> int:
 def upsert_recurrence_override(
     db: Session, pattern_key: str, merchant: str, category: str, status: str,
     override_amount: Decimal | None = None, override_next_expected: date | None = None,
-    override_cadence: str | None = None, note: str | None = None, commit: bool = True,
+    override_cadence: str | None = None, note: str | None = None,
+    display_name: str | None = None, commit: bool = True,
 ) -> RecurrenceOverride:
     if status not in {"confirmed", "rejected", "paused", "ended"}:
         raise ValueError("invalid recurrence status")
@@ -118,6 +122,8 @@ def upsert_recurrence_override(
     row.override_next_expected = override_next_expected
     row.override_cadence = override_cadence
     row.note = note
+    if display_name is not None:
+        row.display_name = display_name.strip() or None
     if commit:
         db.commit()
         db.refresh(row)
@@ -158,6 +164,7 @@ def _apply_overrides(db: Session, patterns: list[RecurringPattern], include_reje
             confidence=Decimal("1.000") if override.status == "confirmed" else pattern.confidence,
             last_seen=pattern.last_seen, next_expected=(override.override_next_expected or pattern.next_expected),
             management_status=override.status, manual_override=True, note=override.note,
+            display_name=override.display_name,
         ))
     for override in overrides.values():
         if not override.pattern_key.startswith("manual:") or (override.status == "rejected" and not include_rejected):
@@ -170,7 +177,7 @@ def _apply_overrides(db: Session, patterns: list[RecurringPattern], include_reje
             occurrences=0, average_amount=override.override_amount, amount_variation=ZERO,
             cost_type="fixed", confidence=Decimal("1.000"), last_seen=override.override_next_expected,
             next_expected=override.override_next_expected, management_status=override.status,
-            manual_override=True, note=override.note,
+            manual_override=True, note=override.note, display_name=override.display_name,
         ))
     return sorted(result, key=lambda item: (item.next_expected, -item.confidence))
 
@@ -284,8 +291,10 @@ def forecast_recurring_expenses(
         while expected <= horizon:
             items.append(
                 ForecastItem(
+                    key=pattern.key,
                     expected_on=expected,
                     merchant=pattern.merchant,
+                    display_name=pattern.display_name,
                     category=pattern.category,
                     estimated_amount=pattern.average_amount,
                     cadence=pattern.cadence,
@@ -298,7 +307,7 @@ def forecast_recurring_expenses(
 
 
 def supporting_transactions_for_recurrence(
-    db: Session, merchant: str, category: str, limit: int = 5
+    db: Session, merchant: str, category: str, pattern_key: str | None = None, limit: int = 5
 ) -> list[Transaction]:
     """Return recent local ledger rows that belong to a detected recurrence."""
     candidates = db.scalars(
@@ -312,7 +321,8 @@ def supporting_transactions_for_recurrence(
         )
         .order_by(Transaction.booked_on.desc(), Transaction.id.desc())
     ).all()
-    return [tx for tx in candidates if _pattern_key(tx)[0] == merchant][:max(1, min(limit, 10))]
+    original_merchant = pattern_key.split("|", 1)[0] if pattern_key and "|" in pattern_key else merchant
+    return [tx for tx in candidates if _pattern_key(tx)[0] == original_merchant][:max(1, min(limit, 10))]
 
 
 def cost_structure(

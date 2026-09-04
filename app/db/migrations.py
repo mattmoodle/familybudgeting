@@ -48,6 +48,11 @@ def ensure_schema_compatibility(engine: Engine) -> None:
         if "is_suspicious" not in columns:
             statements.append("ALTER TABLE human_check_items ADD COLUMN is_suspicious BOOLEAN NOT NULL DEFAULT 0")
 
+    if "recurrence_overrides" in tables:
+        columns = {c["name"] for c in inspector.get_columns("recurrence_overrides")}
+        if "display_name" not in columns:
+            statements.append("ALTER TABLE recurrence_overrides ADD COLUMN display_name VARCHAR(180)")
+
     if not statements:
         return
     with engine.begin() as conn:

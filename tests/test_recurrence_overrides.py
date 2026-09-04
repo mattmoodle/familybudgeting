@@ -10,6 +10,7 @@ from app.services.budgeting import budget_vs_actual, upsert_budget
 from app.services.recurrence import (
     detect_recurring_patterns,
     forecast_recurring_expenses,
+    supporting_transactions_for_recurrence,
     upsert_recurrence_override,
 )
 
@@ -60,6 +61,26 @@ def test_confirmed_override_changes_amount_date_and_forecast():
         forecast = forecast_recurring_expenses(db, horizon_days=30, as_of=date(2026, 8, 15))
         assert forecast[0].expected_on == date(2026, 8, 28)
         assert forecast[0].estimated_amount == Decimal("1025")
+
+
+def test_display_name_changes_forecast_label_without_changing_original_merchant():
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    with Session(engine) as db:
+        setup_monthly(db)
+        pattern = detect_recurring_patterns(db)[0]
+        upsert_recurrence_override(
+            db, pattern.key, pattern.merchant, pattern.category, "confirmed", display_name="Home loan"
+        )
+        managed = detect_recurring_patterns(db)[0]
+        forecast = forecast_recurring_expenses(db, horizon_days=40, as_of=date(2026, 8, 1))
+
+        assert managed.merchant == "mortgage"
+        assert managed.display_name == "Home loan"
+        assert forecast[0].merchant == "mortgage"
+        assert forecast[0].display_name == "Home loan"
+        evidence = supporting_transactions_for_recurrence(db, "Home loan", "Housing", pattern_key=forecast[0].key)
+        assert len(evidence) == 3
 
 
 def test_rejected_and_paused_patterns_do_not_create_future_expenses():

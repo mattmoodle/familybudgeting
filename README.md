@@ -506,7 +506,7 @@ Nuovi endpoint:
 - `GET /api/analytics/forecast?days=60`
 - `GET /api/analytics/cost-structure`
 
-La home mostra una tabella **Ricorrenze e abbonamenti**, la struttura dei costi e l'elenco delle prossime uscite previste. Il nome di ogni uscita prevista è cliccabile: un popup locale mostra data, importo, categoria, frequenza e i movimenti storici che supportano la previsione, con accesso diretto alla ricerca nella pagina Transazioni.
+La home mostra una tabella **Ricorrenze e abbonamenti**, la struttura dei costi e l'elenco delle prossime uscite previste. Il nome di ogni uscita prevista è cliccabile: un popup locale mostra data, importo, categoria, frequenza e i movimenti storici che supportano la previsione, con accesso diretto alla ricerca nella pagina Transazioni. Da quel popup puoi anche impostare un **nome visualizzato** più chiaro (per esempio `Audible`): è un alias locale della ricorrenza, quindi la causale originale resta invariata e consultabile.
 
 ### Safety-first detection
 
@@ -561,7 +561,7 @@ Supported states:
 - **ended** — the historical pattern remains part of cost-structure analysis, while no future occurrence is forecast;
 - **rejected** — the pattern is treated as a false positive and is removed from recurrence-based forecasts and recurring cost classification.
 
-A confirmed pattern can optionally override the automatically inferred amount, next expected date, cadence and add a local note. These overrides are stored in SQLite in `recurrence_overrides`. The source ledger remains immutable: only the interpretation of the recurrence is changed.
+A confirmed pattern can optionally override the automatically inferred amount, next expected date, cadence, display name and add a local note. These overrides are stored in SQLite in `recurrence_overrides`. The source ledger remains immutable: only the interpretation of the recurrence is changed.
 
 The same manual decision is consumed by both:
 

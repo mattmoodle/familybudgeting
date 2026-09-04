@@ -154,11 +154,14 @@ class RecurringPatternRead(BaseModel):
     management_status: str = "auto"
     manual_override: bool = False
     note: str | None = None
+    display_name: str | None = None
 
 
 class ForecastItemRead(BaseModel):
+    key: str
     expected_on: date
     merchant: str
+    display_name: str | None = None
     category: str
     estimated_amount: Decimal
     cadence: str
@@ -198,6 +201,7 @@ class BudgetCopyRequest(BaseModel):
 class RecurrenceOverrideUpsert(BaseModel):
     pattern_key: str = Field(min_length=1, max_length=300)
     merchant: str = Field(min_length=1, max_length=180)
+    display_name: str | None = Field(default=None, max_length=180)
     category: str = Field(min_length=1, max_length=80)
     status: str = Field(pattern=r"^(confirmed|rejected|paused|ended)$")
     override_amount: Decimal | None = Field(default=None, ge=0)

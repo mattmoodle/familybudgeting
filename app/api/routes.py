@@ -490,9 +490,10 @@ def patch_transactions_bulk(payload: TransactionBulkPatch, db: Session = Depends
 def recurrence_supporting_transactions(
     merchant: str = Query(min_length=1, max_length=180),
     category: str = Query(min_length=1, max_length=80),
+    pattern_key: str | None = Query(default=None, max_length=300),
     db: Session = Depends(get_db),
 ):
-    transactions = supporting_transactions_for_recurrence(db, merchant, category)
+    transactions = supporting_transactions_for_recurrence(db, merchant, category, pattern_key=pattern_key)
     return {
         "transactions": [
             {
