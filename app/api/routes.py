@@ -236,10 +236,111 @@ def health() -> dict[str, str]:
 
 
 @router.get("/imports", response_class=HTMLResponse)
-def import_history(request: Request, db: Session = Depends(get_db)):
-    batches = db.scalars(select(ImportBatch).order_by(ImportBatch.created_at.desc(), ImportBatch.id.desc())).all()
+def import_history(
+    request: Request,
+    import_q: str | None = None,
+    import_account_id: str | None = None,
+    import_mode: str | None = None,
+    import_status: str | None = None,
+    imported_from: str | None = None,
+    imported_to: str | None = None,
+    import_sort: str | None = None,
+    import_direction: str | None = None,
+    db: Session = Depends(get_db),
+):
+    """Render the local archive with source-period ranges for each import batch."""
+    selected_account_id = optional_int(import_account_id, "import_account_id")
+    imported_start = optional_date(imported_from)
+    imported_end = optional_date(imported_to)
+    query = select(ImportBatch)
+    search = (import_q or "").strip()
+    if search:
+        query = query.where(ImportBatch.source_filename.ilike(f"%{search}%"))
+    if selected_account_id is not None:
+        query = query.where(ImportBatch.account_id == selected_account_id)
+    if import_mode in {"standard", "human-check"}:
+        query = query.where(ImportBatch.import_mode == import_mode)
+    if import_status:
+        query = query.where(ImportBatch.status == import_status)
+
+    batches = db.scalars(query).all()
+    if imported_start or imported_end:
+        batches = [
+            batch for batch in batches
+            if (not imported_start or batch.created_at.date() >= imported_start)
+            and (not imported_end or batch.created_at.date() <= imported_end)
+        ]
+    batch_ids = [batch.id for batch in batches]
+    transaction_ranges = {}
+    human_check_ranges = {}
+    if batch_ids:
+        transaction_ranges = {
+            batch_id: (first_on, last_on)
+            for batch_id, first_on, last_on in db.execute(
+                select(Transaction.import_batch_id, func.min(Transaction.booked_on), func.max(Transaction.booked_on))
+                .where(Transaction.import_batch_id.in_(batch_ids))
+                .group_by(Transaction.import_batch_id)
+            )
+        }
+        human_check_ranges = {
+            batch_id: (first_on, last_on)
+            for batch_id, first_on, last_on in db.execute(
+                select(
+                    HumanCheckItem.import_batch_id,
+                    func.min(func.coalesce(HumanCheckItem.corrected_booked_on, HumanCheckItem.parsed_booked_on)),
+                    func.max(func.coalesce(HumanCheckItem.corrected_booked_on, HumanCheckItem.parsed_booked_on)),
+                )
+                .where(HumanCheckItem.import_batch_id.in_(batch_ids))
+                .group_by(HumanCheckItem.import_batch_id)
+            )
+        }
+
     accounts = {account.id: account.name for account in db.scalars(select(Account)).all()}
-    return templates.TemplateResponse(request=request, name="imports.html", context={"batches": batches, "accounts": accounts})
+    rows = []
+    for batch in batches:
+        # Human-check preserves staging rows, including corrected dates, so it represents
+        # the complete original statement even while its final ledger is still incomplete.
+        first_on, last_on = human_check_ranges.get(batch.id, transaction_ranges.get(batch.id, (None, None)))
+        rows.append({
+            "id": batch.id,
+            "source_filename": batch.source_filename,
+            "account_id": batch.account_id,
+            "account_name": accounts.get(batch.account_id, "Non disponibile"),
+            "created_at": batch.created_at,
+            "import_mode": batch.import_mode,
+            "status": batch.status,
+            "imported_rows": batch.imported_rows,
+            "skipped_rows": batch.skipped_rows,
+            "first_transaction_on": first_on,
+            "last_transaction_on": last_on,
+        })
+    valid_sort_fields = {"source_filename", "account_name", "created_at", "import_mode", "status", "first_transaction_on", "last_transaction_on", "imported_rows", "skipped_rows"}
+    selected_sort = import_sort if import_sort in valid_sort_fields else "created_at"
+    descending = import_direction != "asc"
+    present_rows = [row for row in rows if row[selected_sort] is not None]
+    empty_rows = [row for row in rows if row[selected_sort] is None]
+    present_rows.sort(
+        key=lambda row: row[selected_sort].casefold() if isinstance(row[selected_sort], str) else row[selected_sort],
+        reverse=descending,
+    )
+    return templates.TemplateResponse(
+        request=request,
+        name="imports.html",
+        context={
+            "batches": present_rows + empty_rows,
+            "accounts": accounts,
+            "import_filters": {
+                "q": import_q or "",
+                "account_id": selected_account_id,
+                "mode": import_mode or "",
+                "status": import_status or "",
+                "from": imported_start.isoformat() if imported_start else "",
+                "to": imported_end.isoformat() if imported_end else "",
+                "sort": selected_sort,
+                "direction": "desc" if descending else "asc",
+            },
+        },
+    )
 
 
 @router.post("/api/app/restart")

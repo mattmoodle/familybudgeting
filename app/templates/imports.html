@@ -15,11 +15,25 @@
   <nav class="main-nav" aria-label="Navigazione principale">
     <a href="/">Panoramica</a><a href="/budget">Budget</a><a href="/transactions">Transazioni</a><a href="/review">Da verificare</a><a href="/recurrences">Ricorrenze</a><a href="/insights">Analisi</a><a href="/imports" class="active">Documenti</a>
   </nav>
+  <section class="panel filters-panel">
+    <form method="get" class="filters transaction-filters">
+      <div><label>Cerca documento</label><input type="search" name="import_q" value="{{ import_filters.q }}" placeholder="Nome file"></div>
+      <div><label>Conto</label><select name="import_account_id"><option value="">Tutti</option>{% for account_id, account_name in accounts.items() %}<option value="{{ account_id }}" {% if import_filters.account_id == account_id %}selected{% endif %}>{{ account_name }}</option>{% endfor %}</select></div>
+      <div><label>Modalità</label><select name="import_mode"><option value="">Tutte</option><option value="standard" {% if import_filters.mode == 'standard' %}selected{% endif %}>Standard</option><option value="human-check" {% if import_filters.mode == 'human-check' %}selected{% endif %}>Human-check</option></select></div>
+      <div><label>Stato</label><select name="import_status"><option value="">Tutti</option><option value="completed" {% if import_filters.status == 'completed' %}selected{% endif %}>Completato</option><option value="pending" {% if import_filters.status == 'pending' %}selected{% endif %}>In attesa</option><option value="failed" {% if import_filters.status == 'failed' %}selected{% endif %}>Non riuscito</option><option value="human_check" {% if import_filters.status == 'human_check' %}selected{% endif %}>In revisione</option></select></div>
+      <div><label>Importato dal</label><input type="date" name="imported_from" value="{{ import_filters.from }}"></div>
+      <div><label>Importato al</label><input type="date" name="imported_to" value="{{ import_filters.to }}"></div>
+      <div class="filter-actions"><button type="submit">Applica</button><a class="button secondary" href="/imports">Reset</a></div>
+    </form>
+  </section>
   <section class="panel">
     {% if batches %}
-    <div class="table-wrap"><table><thead><tr><th>Documento</th><th>Conto</th><th>Importato il</th><th>Modalità</th><th>Stato</th><th>Righe</th><th></th></tr></thead><tbody>
+    <div class="table-wrap"><table><thead><tr>
+      {% set headers = [('source_filename', 'Documento'), ('account_name', 'Conto'), ('first_transaction_on', 'Prima transazione'), ('last_transaction_on', 'Ultima transazione'), ('created_at', 'Importato il'), ('import_mode', 'Modalità'), ('status', 'Stato'), ('imported_rows', 'Righe')] %}
+      {% for field, label in headers %}<th><a class="sort-link" href="{{ request.url.include_query_params(import_sort=field, import_direction='desc' if import_filters.sort == field and import_filters.direction == 'asc' else 'asc') }}">{{ label }}{% if import_filters.sort == field %} {{ '↓' if import_filters.direction == 'desc' else '↑' }}{% endif %}</a></th>{% endfor %}<th></th>
+    </tr></thead><tbody>
     {% for batch in batches %}
-      <tr data-batch-id="{{ batch.id }}"><td><strong>{{ batch.source_filename }}</strong></td><td>{{ accounts.get(batch.account_id, 'Non disponibile') }}</td><td>{{ batch.created_at.strftime('%d/%m/%Y %H:%M') }}</td><td>{{ 'Human-check' if batch.import_mode == 'human-check' else 'Standard' }}</td><td><span class="pill {% if batch.status == 'completed' %}ok{% elif batch.status == 'failed' %}warn{% else %}neutral{% endif %}">{{ batch.status }}</span></td><td>{{ batch.imported_rows }} importate · {{ batch.skipped_rows }} saltate</td><td class="actions">{% if batch.import_mode == 'human-check' and batch.status != 'completed' %}<a class="button secondary" href="/human-check/{{ batch.id }}">Apri revisione</a>{% endif %}<button type="button" class="button danger" data-delete-import data-batch-id="{{ batch.id }}" data-filename="{{ batch.source_filename }}">Elimina import</button></td></tr>
+      <tr data-batch-id="{{ batch.id }}"><td><strong>{{ batch.source_filename }}</strong></td><td>{{ batch.account_name }}</td><td>{{ batch.first_transaction_on.strftime('%d/%m/%Y') if batch.first_transaction_on else '—' }}</td><td>{{ batch.last_transaction_on.strftime('%d/%m/%Y') if batch.last_transaction_on else '—' }}</td><td>{{ batch.created_at.strftime('%d/%m/%Y %H:%M') }}</td><td>{{ 'Human-check' if batch.import_mode == 'human-check' else 'Standard' }}</td><td><span class="pill {% if batch.status == 'completed' %}ok{% elif batch.status == 'failed' %}warn{% else %}neutral{% endif %}">{{ batch.status }}</span></td><td>{{ batch.imported_rows }} importate · {{ batch.skipped_rows }} saltate</td><td class="actions">{% if batch.import_mode == 'human-check' and batch.status != 'completed' %}<a class="button secondary" href="/human-check/{{ batch.id }}">Apri revisione</a>{% endif %}<button type="button" class="button danger" data-delete-import data-batch-id="{{ batch.id }}" data-filename="{{ batch.source_filename }}">Elimina import</button></td></tr>
     {% endfor %}
     </tbody></table></div>
     {% else %}<p class="muted empty">Non hai ancora importato documenti.</p>{% endif %}

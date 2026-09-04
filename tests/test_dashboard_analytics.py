@@ -1,13 +1,13 @@
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 from starlette.requests import Request
 
-from app.api.routes import home, patch_transactions_bulk
+from app.api.routes import home, import_history, patch_transactions_bulk
 from app.db.base import Base
-from app.models.entities import Account, Transaction
+from app.models.entities import Account, HumanCheckItem, ImportBatch, Transaction
 from app.schemas.domain import TransactionBulkPatch
 from app.services.analytics import category_totals, dashboard_summary, monthly_cashflow, review_queue, suspicious_queue
 
@@ -96,3 +96,52 @@ def test_transactions_page_paginates_search_results_and_bulk_updates():
         updated = db.scalars(select(Transaction).where(Transaction.id.in_([transactions[0].id, transactions[1].id]))).all()
         assert {item.category for item in updated} == {"Shopping"}
         assert all(item.is_suspicious for item in updated)
+
+
+def test_import_history_shows_statement_period_and_sorts_rows():
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    with Session(engine) as db:
+        account = Account(name="Archive Bank", account_type="bank")
+        db.add(account)
+        db.flush()
+        human_batch = ImportBatch(
+            source_filename="june-human-check.pdf",
+            stored_path="data/archive/june-human-check.pdf",
+            file_hash="a" * 64,
+            account_id=account.id,
+            status="human_check",
+            import_mode="human-check",
+            created_at=datetime(2026, 9, 3, 12, 0),
+        )
+        standard_batch = ImportBatch(
+            source_filename="december.csv",
+            stored_path="data/archive/december.csv",
+            file_hash="b" * 64,
+            account_id=account.id,
+            status="completed",
+            import_mode="standard",
+            created_at=datetime(2026, 9, 4, 12, 0),
+        )
+        db.add_all([human_batch, standard_batch])
+        db.flush()
+        db.add_all([
+            HumanCheckItem(import_batch_id=human_batch.id, sequence=1, original_text="first", parsed_booked_on=date(2026, 6, 1), parsed_description="First", parsed_amount=Decimal("-5")),
+            HumanCheckItem(import_batch_id=human_batch.id, sequence=2, original_text="last", parsed_booked_on=date(2026, 6, 30), parsed_description="Last", parsed_amount=Decimal("-10")),
+            tx(account.id, date(2026, 12, 1), "Statement transaction", "-25", "Shopping"),
+        ])
+        db.flush()
+        transaction = db.scalar(select(Transaction).where(Transaction.description == "Statement transaction"))
+        transaction.import_batch_id = standard_batch.id
+        db.commit()
+
+        request = Request({"type": "http", "method": "GET", "path": "/imports", "headers": [], "query_string": b"import_sort=first_transaction_on&import_direction=asc"})
+        response = import_history(request=request, import_sort="first_transaction_on", import_direction="asc", db=db)
+        rendered = response.body.decode()
+        assert "01/06/2026" in rendered
+        assert "30/06/2026" in rendered
+        assert rendered.index("june-human-check.pdf") < rendered.index("december.csv")
+
+        filtered = import_history(request=request, import_q="december", db=db).body.decode()
+        assert "december.csv" in filtered
+        assert "june-human-check.pdf" not in filtered
