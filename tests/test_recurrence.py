@@ -5,7 +5,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from app.db.base import Base
-from app.models.entities import Account, Transaction
+from app.models.entities import Account, RecurrenceAlias, Transaction
 from app.services.recurrence import cost_structure, detect_recurring_patterns, forecast_recurring_expenses, supporting_transactions_for_recurrence
 
 
@@ -63,3 +63,29 @@ def test_recurring_detection_forecast_and_cost_structure():
         assert structure["fixed"] == Decimal("51.96")
         assert structure["variable"] == Decimal("335.00")
         assert structure["occasional"] == Decimal("400.00")
+
+
+def test_recurrence_aliases_merge_small_merchant_variants_into_one_pattern():
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    with Session(engine) as db:
+        account = Account(name="Bank", account_type="bank")
+        db.add(account)
+        db.flush()
+        first = "openai chatgpt subscr san francisco ca"
+        second = "openai chatgpt subscr san francisco ca24"
+        db.add_all([
+            tx(account.id, date(2026, 5, 24), "ChatGPT", "-21.07", "Subscriptions", first),
+            tx(account.id, date(2026, 6, 24), "ChatGPT", "-21.36", "Subscriptions", second),
+            tx(account.id, date(2026, 7, 24), "ChatGPT", "-21.09", "Subscriptions", first),
+            RecurrenceAlias(source_merchant=first, category="Subscriptions", canonical_merchant="ChatGPT"),
+            RecurrenceAlias(source_merchant=second, category="Subscriptions", canonical_merchant="ChatGPT"),
+        ])
+        db.commit()
+
+        patterns = detect_recurring_patterns(db)
+        assert len(patterns) == 1
+        assert patterns[0].merchant == "ChatGPT"
+        assert patterns[0].occurrences == 3
+        evidence = supporting_transactions_for_recurrence(db, "ChatGPT", "Subscriptions", pattern_key=patterns[0].key)
+        assert len(evidence) == 3

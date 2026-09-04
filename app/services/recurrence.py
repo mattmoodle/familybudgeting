@@ -10,7 +10,7 @@ from statistics import median
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.entities import RecurrenceOverride, Transaction
+from app.models.entities import RecurrenceAlias, RecurrenceOverride, Transaction
 from app.services.merchant import normalize_merchant
 
 ZERO = Decimal("0.00")
@@ -87,10 +87,19 @@ def _cadence(interval_days: float) -> tuple[str, int] | None:
     return None
 
 
-def _pattern_key(tx: Transaction) -> tuple[str, str]:
+def _recurrence_aliases(db: Session) -> dict[tuple[str, str], str]:
+    return {
+        (row.source_merchant, row.category): row.canonical_merchant
+        for row in db.scalars(select(RecurrenceAlias)).all()
+    }
+
+
+def _pattern_key(tx: Transaction, aliases: dict[tuple[str, str], str] | None = None) -> tuple[str, str]:
     merchant = (tx.merchant or normalize_merchant(tx.description)).strip()
     if not merchant:
         merchant = tx.normalized_description.strip()[:80]
+    if aliases:
+        merchant = aliases.get((merchant, tx.category), merchant)
     return merchant, tx.category
 
 
@@ -206,9 +215,10 @@ def detect_recurring_patterns(
         filters.append(Transaction.category == category)
 
     txs = db.scalars(select(Transaction).where(*filters).order_by(Transaction.booked_on)).all()
+    aliases = _recurrence_aliases(db)
     grouped: dict[tuple[str, str], list[Transaction]] = defaultdict(list)
     for tx in txs:
-        merchant, tx_category = _pattern_key(tx)
+        merchant, tx_category = _pattern_key(tx, aliases)
         if merchant and merchant.lower() not in {"unknown", "uncategorized"}:
             grouped[(merchant, tx_category)].append(tx)
 
@@ -322,7 +332,8 @@ def supporting_transactions_for_recurrence(
         .order_by(Transaction.booked_on.desc(), Transaction.id.desc())
     ).all()
     original_merchant = pattern_key.split("|", 1)[0] if pattern_key and "|" in pattern_key else merchant
-    return [tx for tx in candidates if _pattern_key(tx)[0] == original_merchant][:max(1, min(limit, 10))]
+    aliases = _recurrence_aliases(db)
+    return [tx for tx in candidates if _pattern_key(tx, aliases)[0] == original_merchant][:max(1, min(limit, 10))]
 
 
 def cost_structure(

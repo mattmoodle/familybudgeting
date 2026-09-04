@@ -15,6 +15,7 @@ from app.models.entities import (
     HumanCheckDecision,
     HumanCheckItem,
     ImportBatch,
+    RecurrenceAlias,
     RecurrenceOverride,
     Rule,
     Transaction,
@@ -37,6 +38,7 @@ from app.schemas.domain import (
     MonthlyCategoryStat,
     RecurrenceOverrideRead,
     RecurrenceOverrideUpsert,
+    RecurrenceAliasUpsert,
     RecurringPatternRead,
     RuleCreate,
     RuleRead,
@@ -747,6 +749,25 @@ def reset_recurrence_override(pattern_key: str, db: Session = Depends(get_db)):
     if not delete_recurrence_override(db, pattern_key):
         raise HTTPException(404, "Recurrence override not found")
     return {"deleted": True, "pattern_key": pattern_key}
+
+
+@router.put("/api/recurrence-aliases")
+def group_recurrence_aliases(payload: RecurrenceAliasUpsert, db: Session = Depends(get_db)):
+    """Map merchant variants to one locally chosen recurrence group name."""
+    category = " ".join(payload.category.split())
+    canonical = " ".join(payload.canonical_merchant.split())
+    sources = {" ".join(value.split()) for value in payload.source_merchants if value.strip()}
+    if not canonical or not sources:
+        raise HTTPException(422, "Choose a group name and at least one merchant variant")
+    for source in sources:
+        alias = db.scalar(select(RecurrenceAlias).where(RecurrenceAlias.source_merchant == source, RecurrenceAlias.category == category))
+        if alias is None:
+            alias = RecurrenceAlias(source_merchant=source, category=category, canonical_merchant=canonical)
+            db.add(alias)
+        else:
+            alias.canonical_merchant = canonical
+    db.commit()
+    return {"grouped": len(sources), "category": category, "canonical_merchant": canonical}
 
 
 @router.get("/api/analytics/recurring", response_model=list[RecurringPatternRead])

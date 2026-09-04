@@ -174,3 +174,15 @@ class RecurrenceOverride(Base):
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class RecurrenceAlias(Base):
+    __tablename__ = "recurrence_aliases"
+    __table_args__ = (UniqueConstraint("source_merchant", "category", name="uq_recurrence_alias_source_category"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source_merchant: Mapped[str] = mapped_column(String(180), index=True)
+    category: Mapped[str] = mapped_column(String(80), index=True)
+    canonical_merchant: Mapped[str] = mapped_column(String(180), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -4,7 +4,7 @@
 
 ## Navigation
 
-The interface is organized into dedicated pages accessible from the top menu: **Panoramica**, **Budget**, **Transazioni**, **Da verificare**, **Ricorrenze**, **Analisi**, and **Documenti**. This keeps focused workflows separate while preserving the same local SQLite data and offline operation. The **Ricorrenze** page supports filters by merchant, category, cadence, type and status; click a column header to sort the visible recurrences.
+The interface is organized into dedicated pages accessible from the top menu: **Panoramica**, **Budget**, **Transazioni**, **Da verificare**, **Ricorrenze**, **Regole**, **Analisi**, and **Documenti**. This keeps focused workflows separate while preserving the same local SQLite data and offline operation. The **Ricorrenze** page supports filters by merchant, category, cadence, type and status; click a column header to sort the visible recurrences.
 
 ## Supported statement formats
 
@@ -479,6 +479,8 @@ La startup include una piccola migrazione SQLite idempotente per aggiungere `imp
 La dashboard rileva ora automaticamente spese ricorrenti senza servizi cloud o calendari esterni.
 
 Il detector raggruppa le uscite per **merchant normalizzato + categoria** e considera una sequenza ricorrente solo quando trova almeno tre occorrenze con una cadenza sufficientemente regolare. Le cadenze riconosciute sono settimanale, bisettimanale, mensile, bimestrale, trimestrale, semestrale e annuale.
+
+Quando un servizio appare con piccole varianti nella causale, usa **Unisci** nella pagina Ricorrenze: seleziona le varianti, ad esempio `openai chatgpt … ca` e `… ca24`, quindi dai al gruppo un nome comune come `ChatGPT`. Il raggruppamento è locale e fa confluire le occorrenze in un’unica ricorrenza; le transazioni e le causali originali restano immutate.
 
 Per ogni ricorrenza vengono calcolati:
 

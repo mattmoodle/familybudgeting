@@ -234,3 +234,9 @@ class RecurrenceOverrideUpsert(BaseModel):
 class RecurrenceOverrideRead(RecurrenceOverrideUpsert):
     model_config = ConfigDict(from_attributes=True)
     id: int
+
+
+class RecurrenceAliasUpsert(BaseModel):
+    category: str = Field(min_length=1, max_length=80)
+    canonical_merchant: str = Field(min_length=1, max_length=180)
+    source_merchants: list[str] = Field(min_length=1, max_length=50)
