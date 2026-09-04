@@ -297,6 +297,24 @@ def forecast_recurring_expenses(
     return sorted(items, key=lambda item: (item.expected_on, item.merchant))
 
 
+def supporting_transactions_for_recurrence(
+    db: Session, merchant: str, category: str, limit: int = 5
+) -> list[Transaction]:
+    """Return recent local ledger rows that belong to a detected recurrence."""
+    candidates = db.scalars(
+        select(Transaction)
+        .where(
+            Transaction.amount < 0,
+            Transaction.category == category,
+            Transaction.is_duplicate.is_(False),
+            Transaction.is_internal_transfer.is_(False),
+            Transaction.excluded_from_analytics.is_(False),
+        )
+        .order_by(Transaction.booked_on.desc(), Transaction.id.desc())
+    ).all()
+    return [tx for tx in candidates if _pattern_key(tx)[0] == merchant][:max(1, min(limit, 10))]
+
+
 def cost_structure(
     db: Session,
     start: date | None = None,

@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.db.base import Base
 from app.models.entities import Account, Transaction
-from app.services.recurrence import cost_structure, detect_recurring_patterns, forecast_recurring_expenses
+from app.services.recurrence import cost_structure, detect_recurring_patterns, forecast_recurring_expenses, supporting_transactions_for_recurrence
 
 
 def tx(account_id: int, d: date, desc: str, amount: str, category: str, merchant: str):
@@ -56,6 +56,8 @@ def test_recurring_detection_forecast_and_cost_structure():
         forecast = forecast_recurring_expenses(db, horizon_days=40, as_of=date(2026, 8, 3))
         assert any(item.merchant == "netflix" and item.expected_on == date(2026, 9, 1) for item in forecast)
         assert any(item.merchant == "conad" for item in forecast)
+        evidence = supporting_transactions_for_recurrence(db, "netflix", "Shopping")
+        assert [item.description for item in evidence] == ["Netflix", "Netflix", "Netflix", "Netflix"]
 
         structure = cost_structure(db)
         assert structure["fixed"] == Decimal("51.96")

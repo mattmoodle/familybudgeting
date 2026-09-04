@@ -69,6 +69,7 @@ from app.services.recurrence import (
     delete_recurrence_override,
     detect_recurring_patterns,
     forecast_recurring_expenses,
+    supporting_transactions_for_recurrence,
     upsert_recurrence_override,
 )
 
@@ -361,6 +362,27 @@ def patch_transactions_bulk(payload: TransactionBulkPatch, db: Session = Depends
     result = db.execute(update(Transaction).where(Transaction.id.in_(payload.transaction_ids)).values(**values))
     db.commit()
     return {"updated": result.rowcount or 0}
+
+
+@router.get("/api/recurrences/supporting-transactions")
+def recurrence_supporting_transactions(
+    merchant: str = Query(min_length=1, max_length=180),
+    category: str = Query(min_length=1, max_length=80),
+    db: Session = Depends(get_db),
+):
+    transactions = supporting_transactions_for_recurrence(db, merchant, category)
+    return {
+        "transactions": [
+            {
+                "id": tx.id,
+                "booked_on": tx.booked_on.isoformat(),
+                "description": tx.description,
+                "amount": float(tx.amount),
+                "account": tx.account.name,
+            }
+            for tx in transactions
+        ]
+    }
 
 
 @router.get("/human-check/{batch_id}", response_class=HTMLResponse)

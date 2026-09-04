@@ -194,7 +194,7 @@
           {% for item in forecast %}
           <div class="forecast-row">
             <time>{{ item.expected_on.strftime('%d/%m') }}</time>
-            <div><strong>{{ item.merchant }}</strong><small>{{ item.category }} · {{ item.cadence }}</small></div>
+            <div><button type="button" class="forecast-link" onclick='openForecastDetails({{ item.merchant|tojson }}, {{ item.category|tojson }}, {{ item.cadence|tojson }}, {{ item.expected_on.isoformat()|tojson }}, {{ item.estimated_amount }})'>{{ item.merchant }}</button><small>{{ item.category }} · {{ item.cadence }}</small></div>
             <span>≈ €{{ '%.2f'|format(item.estimated_amount) }}</span>
           </div>
           {% endfor %}
@@ -380,6 +380,16 @@
     </form>
   </dialog>
 
+  <dialog id="forecast-details-dialog">
+    <div class="dialog-form">
+      <div class="dialog-title"><h2>Dettaglio uscita prevista</h2><button type="button" class="close" onclick="this.closest('dialog').close()">×</button></div>
+      <dl class="forecast-details"><div><dt>Descrizione</dt><dd id="forecast-detail-merchant"></dd></div><div><dt>Data prevista</dt><dd id="forecast-detail-date"></dd></div><div><dt>Categoria</dt><dd id="forecast-detail-category"></dd></div><div><dt>Frequenza</dt><dd id="forecast-detail-cadence"></dd></div><div><dt>Importo stimato</dt><dd id="forecast-detail-amount"></dd></div></dl>
+      <h3>Movimenti che supportano la previsione</h3>
+      <div id="forecast-supporting-transactions" class="forecast-supporting"><p class="muted small">Caricamento…</p></div>
+      <a id="forecast-open-transactions" class="button secondary" href="/transactions">Apri in Transazioni</a>
+    </div>
+  </dialog>
+
 <script>
 const cashflow = {{ cashflow | tojson }};
 const categoryTotals = {{ category_totals | tojson }};
@@ -431,6 +441,13 @@ async function refreshReviewCategories(selectedName,targetId){
   });
 }
 function openEdit(id,category,excluded,recurrenceCadence){document.getElementById('edit-id').value=id;document.getElementById('edit-category').value=category;document.getElementById('edit-excluded').checked=excluded;document.getElementById('edit-create-rule').checked=false;document.getElementById('edit-recurring').checked=Boolean(recurrenceCadence);document.getElementById('edit-recurrence-cadence').disabled=!recurrenceCadence;document.getElementById('edit-recurrence-cadence').value=recurrenceCadence||'monthly';document.getElementById('edit-note').value='';document.getElementById('edit-dialog').showModal();}
+
+const cadenceLabels={weekly:'Settimanale',biweekly:'Bisettimanale',monthly:'Mensile',bimonthly:'Bimestrale',quarterly:'Trimestrale',semiannual:'Semestrale',annual:'Annuale'};
+async function openForecastDetails(merchant,category,cadence,expectedOn,amount){
+  const dialog=document.getElementById('forecast-details-dialog'), list=document.getElementById('forecast-supporting-transactions');
+  document.getElementById('forecast-detail-merchant').textContent=merchant;document.getElementById('forecast-detail-date').textContent=new Date(`${expectedOn}T00:00:00`).toLocaleDateString('it-IT');document.getElementById('forecast-detail-category').textContent=category;document.getElementById('forecast-detail-cadence').textContent=cadenceLabels[cadence]||cadence;document.getElementById('forecast-detail-amount').textContent=`≈ ${euro(amount)}`;document.getElementById('forecast-open-transactions').href=`/transactions?${new URLSearchParams({q:merchant,category}).toString()}`;list.innerHTML='<p class="muted small">Caricamento…</p>';dialog.showModal();
+  try{const response=await fetch(`/api/recurrences/supporting-transactions?${new URLSearchParams({merchant,category})}`);const data=await response.json();if(!response.ok)throw new Error(data.detail||'Impossibile caricare i dettagli.');if(!data.transactions.length){list.innerHTML='<p class="muted small">Questa previsione è stata impostata manualmente o non ha ancora movimenti storici corrispondenti.</p>';return;}list.innerHTML=data.transactions.map(tx=>`<div class="forecast-support-row"><span>${new Date(`${tx.booked_on}T00:00:00`).toLocaleDateString('it-IT')}</span><div><strong>${tx.description}</strong><small>${tx.account}</small></div><b class="negative">${euro(tx.amount)}</b></div>`).join('');}catch(error){list.innerHTML=`<p class="muted small">${error.message||'Impossibile caricare i dettagli.'}</p>`;}
+}
 
 document.getElementById('edit-recurring').addEventListener('change',e=>document.getElementById('edit-recurrence-cadence').disabled=!e.target.checked);
 document.getElementById('edit-form').addEventListener('submit',async e=>{e.preventDefault();const id=document.getElementById('edit-id').value,recurring=document.getElementById('edit-recurring').checked;const body={category:document.getElementById('edit-category').value,create_rule:document.getElementById('edit-create-rule').checked,excluded_from_analytics:document.getElementById('edit-excluded').checked,manual_note:document.getElementById('edit-note').value,is_recurring:recurring,recurrence_cadence:recurring?document.getElementById('edit-recurrence-cadence').value:null};const r=await fetch(`/api/transactions/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(r.ok){location.reload()}else{const data=await r.json();document.getElementById('edit-status').textContent=data.detail||'Errore durante il salvataggio.';}});

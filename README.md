@@ -506,7 +506,7 @@ Nuovi endpoint:
 - `GET /api/analytics/forecast?days=60`
 - `GET /api/analytics/cost-structure`
 
-La home mostra una tabella **Ricorrenze e abbonamenti**, la struttura dei costi e l'elenco delle prossime uscite previste.
+La home mostra una tabella **Ricorrenze e abbonamenti**, la struttura dei costi e l'elenco delle prossime uscite previste. Il nome di ogni uscita prevista è cliccabile: un popup locale mostra data, importo, categoria, frequenza e i movimenti storici che supportano la previsione, con accesso diretto alla ricerca nella pagina Transazioni.
 
 ### Safety-first detection
 
