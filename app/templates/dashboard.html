@@ -201,7 +201,7 @@
           {% for item in forecast %}
           <div class="forecast-row">
             <time>{{ item.expected_on.strftime('%d/%m') }}</time>
-            <div><button type="button" class="forecast-link" onclick='openForecastDetails({{ item.merchant|tojson }}, {{ item.category|tojson }}, {{ item.cadence|tojson }}, {{ item.expected_on.isoformat()|tojson }}, {{ item.estimated_amount }})'>{{ item.merchant }}</button><small>{{ item.category }} · {{ item.cadence }}</small></div>
+            <div><a class="forecast-link" href="/transactions" onclick='openForecastDetails({{ item.merchant|tojson }}, {{ item.category|tojson }}, {{ item.cadence|tojson }}, {{ item.expected_on.isoformat()|tojson }}, {{ item.estimated_amount }});return false;'>{{ item.merchant }}</a><small>{{ item.category }} · {{ item.cadence }}</small></div>
             <span>≈ €{{ '%.2f'|format(item.estimated_amount) }}</span>
           </div>
           {% endfor %}
