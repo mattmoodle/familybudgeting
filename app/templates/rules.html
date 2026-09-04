@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Regole · Family Budget</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<main class="container">
+  <header class="topbar">
+    <div><p class="eyebrow">APPRENDIMENTO LOCALE</p><h1>Regole di classificazione</h1><p class="muted">Fine-tuning locale delle regole usate durante gli import. Priorità più bassa = precedenza più alta.</p></div>
+    <button type="button" class="button secondary" onclick="openCreateRule()">+ Nuova regola</button>
+  </header>
+  <nav class="main-nav" aria-label="Navigazione principale">
+    <a href="/">Panoramica</a><a href="/budget">Budget</a><a href="/transactions">Transazioni</a><a href="/review">Da verificare</a><a href="/recurrences">Ricorrenze</a><a href="/rules" class="active">Regole</a><a href="/insights">Analisi</a><a href="/imports">Documenti</a>
+  </nav>
+  <section class="panel filters-panel">
+    <form method="get" class="filters transaction-filters">
+      <div><label>Cerca</label><input type="search" name="rules_q" value="{{ rule_filters.q }}" placeholder="Pattern o categoria"></div>
+      <div><label>Categoria</label><select name="rules_category"><option value="">Tutte</option>{% for category in categories %}<option value="{{ category.name }}" {% if rule_filters.category == category.name %}selected{% endif %}>{{ category.name }}</option>{% endfor %}</select></div>
+      <div><label>Stato</label><select name="rules_status"><option value="">Tutti</option><option value="active" {% if rule_filters.status == 'active' %}selected{% endif %}>Attive</option><option value="inactive" {% if rule_filters.status == 'inactive' %}selected{% endif %}>Disattivate</option></select></div>
+      <div><label>Origine</label><select name="rules_source"><option value="">Tutte</option><option value="learned" {% if rule_filters.source == 'learned' %}selected{% endif %}>Apprese da correzione</option><option value="manual" {% if rule_filters.source == 'manual' %}selected{% endif %}>Aggiunte manualmente</option></select></div>
+      <div class="filter-actions"><button type="submit">Applica</button><a class="button secondary" href="/rules">Reset</a></div>
+    </form>
+  </section>
+  <section class="panel">
+    <div class="panel-heading"><div><h2>Regole locali</h2><p class="muted small">La prima regola attiva che trova una corrispondenza assegna la categoria.</p></div><span class="count-badge">{{ rules|length }}</span></div>
+    {% if rules %}
+    <div class="table-wrap"><table><thead><tr>
+      {% set headers = [('pattern', 'Pattern'), ('category', 'Categoria'), ('priority', 'Priorità'), ('active', 'Stato'), ('created_from_manual_correction', 'Origine'), ('created_at', 'Creata il')] %}
+      {% for field, label in headers %}<th><a class="sort-link" href="{{ request.url.include_query_params(rules_sort=field, rules_direction='desc' if rule_filters.sort == field and rule_filters.direction == 'asc' else 'asc') }}">{{ label }}{% if rule_filters.sort == field %} {{ '↓' if rule_filters.direction == 'desc' else '↑' }}{% endif %}</a></th>{% endfor %}<th></th>
+    </tr></thead><tbody>
+      {% for rule in rules %}
+      <tr><td><strong>{{ rule.pattern }}</strong></td><td>{{ rule.category }}</td><td>{{ rule.priority }}</td><td><span class="pill {% if rule.active %}ok{% else %}neutral{% endif %}">{{ 'attiva' if rule.active else 'disattivata' }}</span></td><td>{{ 'appresa da correzione' if rule.created_from_manual_correction else 'manuale' }}</td><td>{{ rule.created_at.strftime('%d/%m/%Y %H:%M') }}</td><td class="actions"><button type="button" class="icon-button" onclick='openEditRule({{ rule.id }}, {{ rule.pattern|tojson }}, {{ rule.category|tojson }}, {{ rule.priority }}, {{ 'true' if rule.active else 'false' }})'>Modifica</button><button type="button" class="icon-button" onclick='deleteRule({{ rule.id }}, {{ rule.pattern|tojson }})'>Elimina</button></td></tr>
+      {% endfor %}
+    </tbody></table></div>
+    {% else %}<p class="muted empty">Nessuna regola corrisponde ai filtri. Le regole vengono create quando scegli “ricorda regola” durante una correzione, oppure puoi aggiungerne una manualmente.</p>{% endif %}
+  </section>
+</main>
+<dialog id="rule-dialog"><form id="rule-form" class="dialog-form"><div class="dialog-title"><h2 id="rule-dialog-title">Nuova regola</h2><button type="button" class="close" onclick="this.closest('dialog').close()">×</button></div><input type="hidden" id="rule-id"><label>Pattern da riconoscere<input id="rule-pattern" required maxlength="255" placeholder="es. audible, amzn mktp"></label><label>Categoria<select id="rule-category" required>{% for category in categories %}<option value="{{ category.name }}">{{ category.name }}</option>{% endfor %}</select></label><label>Priorità<input id="rule-priority" type="number" min="0" max="1000" value="100" required><small class="muted">0 è la precedenza più alta.</small></label><label class="check"><input type="checkbox" id="rule-active" checked> Regola attiva</label><button type="submit">Salva regola</button><p id="rule-status" class="muted small" role="status"></p></form></dialog>
+<script>
+function openCreateRule(){const form=document.getElementById('rule-form');form.reset();document.getElementById('rule-id').value='';document.getElementById('rule-priority').value='100';document.getElementById('rule-active').checked=true;document.getElementById('rule-dialog-title').textContent='Nuova regola';document.getElementById('rule-status').textContent='';document.getElementById('rule-dialog').showModal();}
+function openEditRule(id,pattern,category,priority,active){document.getElementById('rule-id').value=id;document.getElementById('rule-pattern').value=pattern;document.getElementById('rule-category').value=category;document.getElementById('rule-priority').value=priority;document.getElementById('rule-active').checked=active;document.getElementById('rule-dialog-title').textContent='Modifica regola';document.getElementById('rule-status').textContent='';document.getElementById('rule-dialog').showModal();}
+document.getElementById('rule-form').addEventListener('submit',async event=>{event.preventDefault();const id=document.getElementById('rule-id').value,status=document.getElementById('rule-status'),payload={pattern:document.getElementById('rule-pattern').value,category:document.getElementById('rule-category').value,priority:Number(document.getElementById('rule-priority').value),active:document.getElementById('rule-active').checked};status.textContent='Salvataggio…';const response=await fetch(id?`/api/rules/${id}`:'/api/rules',{method:id?'PATCH':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const data=await response.json();if(response.ok){location.reload()}else status.textContent=data.detail||'Impossibile salvare la regola.';});
+async function deleteRule(id,pattern){if(!confirm(`Eliminare la regola "${pattern}"?`))return;const response=await fetch(`/api/rules/${id}`,{method:'DELETE'});const data=await response.json();if(response.ok)location.reload();else alert(data.detail||'Impossibile eliminare la regola.');}
+</script>
+</body>
+</html>

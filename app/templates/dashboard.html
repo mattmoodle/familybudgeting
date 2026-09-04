@@ -27,6 +27,7 @@
       <a href="/transactions" class="{% if active_page == 'transactions' %}active{% endif %}">Transazioni</a>
       <a href="/review" class="{% if active_page == 'review' %}active{% endif %}">Da verificare{% if review or suspicious %} <span>{{ review|length + suspicious|length }}</span>{% endif %}</a>
       <a href="/recurrences" class="{% if active_page == 'recurrences' %}active{% endif %}">Ricorrenze</a>
+      <a href="/rules">Regole</a>
       <a href="/insights" class="{% if active_page == 'insights' %}active{% endif %}">Analisi</a>
       <a href="/imports" class="{% if active_page == 'imports' %}active{% endif %}">Documenti</a>
     </nav>

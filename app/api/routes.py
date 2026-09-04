@@ -38,6 +38,9 @@ from app.schemas.domain import (
     RecurrenceOverrideRead,
     RecurrenceOverrideUpsert,
     RecurringPatternRead,
+    RuleCreate,
+    RuleRead,
+    RuleUpdate,
     SavingSuggestion,
     TransactionPatch,
     TransactionBulkPatch,
@@ -343,6 +346,51 @@ def import_history(
     )
 
 
+@router.get("/rules", response_class=HTMLResponse)
+def rules_page(
+    request: Request,
+    rules_q: str | None = None,
+    rules_category: str | None = None,
+    rules_status: str | None = None,
+    rules_source: str | None = None,
+    rules_sort: str | None = None,
+    rules_direction: str | None = None,
+    db: Session = Depends(get_db),
+):
+    """Show all locally learned classification rules for manual fine-tuning."""
+    rules = db.scalars(select(Rule)).all()
+    search = (rules_q or "").strip().casefold()
+    rules = [
+        rule for rule in rules
+        if (not search or search in rule.pattern.casefold() or search in rule.category.casefold())
+        and (not rules_category or rule.category == rules_category)
+        and (rules_status != "active" or rule.active)
+        and (rules_status != "inactive" or not rule.active)
+        and (rules_source != "learned" or rule.created_from_manual_correction)
+        and (rules_source != "manual" or not rule.created_from_manual_correction)
+    ]
+    valid_sort_fields = {"pattern", "category", "priority", "active", "created_from_manual_correction", "created_at"}
+    selected_sort = rules_sort if rules_sort in valid_sort_fields else "priority"
+    descending = rules_direction == "desc" if rules_sort in valid_sort_fields else False
+    rules.sort(
+        key=lambda rule: getattr(rule, selected_sort).casefold() if isinstance(getattr(rule, selected_sort), str) else getattr(rule, selected_sort),
+        reverse=descending,
+    )
+    categories = db.scalars(select(Category).order_by(Category.name)).all()
+    return templates.TemplateResponse(
+        request=request,
+        name="rules.html",
+        context={
+            "rules": rules,
+            "categories": categories,
+            "rule_filters": {
+                "q": rules_q or "", "category": rules_category or "", "status": rules_status or "",
+                "source": rules_source or "", "sort": selected_sort, "direction": "desc" if descending else "asc",
+            },
+        },
+    )
+
+
 @router.post("/api/app/restart")
 def restart_app() -> dict[str, str]:
     """Trigger Uvicorn's local reload watcher without changing source contents."""
@@ -379,6 +427,58 @@ def create_category(payload: CategoryCreate, db: Session = Depends(get_db)):
 @router.get("/api/categories", response_model=list[CategoryRead])
 def list_categories(db: Session = Depends(get_db)):
     return db.scalars(select(Category).order_by(Category.name)).all()
+
+
+def _rule_text(value: str) -> str:
+    return " ".join(value.split())
+
+
+@router.get("/api/rules", response_model=list[RuleRead])
+def list_rules(db: Session = Depends(get_db)):
+    return db.scalars(select(Rule).order_by(Rule.priority, Rule.pattern, Rule.id)).all()
+
+
+@router.post("/api/rules", response_model=RuleRead)
+def create_rule(payload: RuleCreate, db: Session = Depends(get_db)):
+    pattern, category = _rule_text(payload.pattern), _rule_text(payload.category)
+    existing = db.scalar(select(Rule).where(Rule.pattern == pattern, Rule.category == category))
+    if existing:
+        raise HTTPException(409, "A rule with this pattern and category already exists")
+    rule = Rule(pattern=pattern, category=category, priority=payload.priority, active=payload.active, created_from_manual_correction=False)
+    db.add(rule)
+    db.commit()
+    db.refresh(rule)
+    return rule
+
+
+@router.patch("/api/rules/{rule_id}", response_model=RuleRead)
+def update_rule(rule_id: int, payload: RuleUpdate, db: Session = Depends(get_db)):
+    rule = db.get(Rule, rule_id)
+    if not rule:
+        raise HTTPException(404, "Rule not found")
+    pattern = _rule_text(payload.pattern) if payload.pattern is not None else rule.pattern
+    category = _rule_text(payload.category) if payload.category is not None else rule.category
+    duplicate = db.scalar(select(Rule).where(Rule.pattern == pattern, Rule.category == category, Rule.id != rule.id))
+    if duplicate:
+        raise HTTPException(409, "A rule with this pattern and category already exists")
+    rule.pattern, rule.category = pattern, category
+    if payload.priority is not None:
+        rule.priority = payload.priority
+    if payload.active is not None:
+        rule.active = payload.active
+    db.commit()
+    db.refresh(rule)
+    return rule
+
+
+@router.delete("/api/rules/{rule_id}")
+def delete_rule(rule_id: int, db: Session = Depends(get_db)):
+    rule = db.get(Rule, rule_id)
+    if not rule:
+        raise HTTPException(404, "Rule not found")
+    db.delete(rule)
+    db.commit()
+    return {"deleted": True, "rule_id": rule_id}
 
 
 @router.post("/api/imports", response_model=ImportResult)

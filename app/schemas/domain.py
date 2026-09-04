@@ -27,6 +27,27 @@ class CategoryRead(CategoryCreate):
     id: int
 
 
+class RuleCreate(BaseModel):
+    pattern: str = Field(min_length=1, max_length=255)
+    category: str = Field(min_length=1, max_length=80)
+    priority: int = Field(default=100, ge=0, le=1000)
+    active: bool = True
+
+
+class RuleUpdate(BaseModel):
+    pattern: str | None = Field(default=None, min_length=1, max_length=255)
+    category: str | None = Field(default=None, min_length=1, max_length=80)
+    priority: int | None = Field(default=None, ge=0, le=1000)
+    active: bool | None = None
+
+
+class RuleRead(RuleCreate):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    created_from_manual_correction: bool
+    created_at: datetime
+
+
 class TransactionPatch(BaseModel):
     category: str | None = None
     excluded_from_analytics: bool | None = None

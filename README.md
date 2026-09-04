@@ -425,6 +425,7 @@ Funzioni disponibili:
 - coda **Da verificare** per transazioni non classificate o con confidenza < 75%;
 - indicazione del conto associato per ogni movimento nella coda **Da verificare**;
 - correzione inline della categoria e creazione opzionale di una regola automatica riutilizzabile;
+- pagina **Regole** per il fine-tuning locale: cerca, filtra e ordina le regole apprese o create manualmente; modifica pattern, categoria, priorità e stato oppure elimina una regola non più valida;
 - creazione immediata di una nuova categoria dalla coda **Da verificare** o dalla correzione Human-check;
 - controllo esplicito **Conta nel budget** per ogni transazione (e in bulk): puoi mantenere una riga come dettaglio storico ma escluderla da budget e analisi per evitare doppi conteggi tra carta/PayPal e relativo addebito sul conto;
 - indicatori visivi per duplicati, trasferimenti interni ed elementi esclusi;
@@ -466,6 +467,8 @@ Il classificatore ora lavora su una gerarchia esplicita e completamente offline:
 Prima della classificazione viene estratta una identità merchant più stabile rimuovendo rumore tipico dei sistemi di pagamento (POS, carta, PayPal/Satispay, riferimenti, IBAN, date e codici variabili). Alias noti come `IKEA Italia Retail`, `Amazon Marketplace` o `Euro Futura SRL` confluiscono in un merchant canonico.
 
 Il classificatore locale non usa reti, API, telemetria né modelli remoti. Le correzioni Human-check marcate come manuali diventano esempi utili per classificare movimenti simili futuri.
+
+La pagina **Regole** rende ispezionabili e modificabili le regole persistenti. La priorità numerica più bassa viene valutata per prima; disattivare una regola la conserva per audit ma la esclude dalle classificazioni future.
 
 ### Upgrade da v0.2
 
