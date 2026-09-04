@@ -426,7 +426,7 @@ Funzioni disponibili:
 - indicazione del conto associato per ogni movimento nella coda **Da verificare**;
 - correzione inline della categoria e creazione opzionale di una regola automatica riutilizzabile;
 - creazione immediata di una nuova categoria dalla coda **Da verificare** o dalla correzione Human-check;
-- modifica di categoria, nota ed esclusione dalle analisi per qualsiasi transazione;
+- controllo esplicito **Conta nel budget** per ogni transazione (e in bulk): puoi mantenere una riga come dettaglio storico ma escluderla da budget e analisi per evitare doppi conteggi tra carta/PayPal e relativo addebito sul conto;
 - indicatori visivi per duplicati, trasferimenti interni ed elementi esclusi;
 - suggerimenti di risparmio deterministici basati sui dati locali.
 
