@@ -5,10 +5,10 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 from starlette.requests import Request
 
-from app.api.routes import home, import_history, patch_transactions_bulk
+from app.api.routes import home, import_history, patch_transaction, patch_transactions_bulk
 from app.db.base import Base
 from app.models.entities import Account, HumanCheckItem, ImportBatch, Transaction
-from app.schemas.domain import TransactionBulkPatch
+from app.schemas.domain import TransactionBulkPatch, TransactionPatch
 from app.services.analytics import category_totals, dashboard_summary, monthly_cashflow, review_queue, suspicious_queue
 
 
@@ -96,6 +96,31 @@ def test_transactions_page_paginates_search_results_and_bulk_updates():
         updated = db.scalars(select(Transaction).where(Transaction.id.in_([transactions[0].id, transactions[1].id]))).all()
         assert {item.category for item in updated} == {"Shopping"}
         assert all(item.is_suspicious for item in updated)
+
+
+def test_transaction_edit_persists_category_and_budget_inclusion():
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    with Session(engine) as db:
+        account = Account(name="Edit Test", account_type="bank")
+        db.add(account)
+        db.flush()
+        transaction = tx(account.id, date(2026, 8, 1), "Store", "-12", "Uncategorized")
+        db.add(transaction)
+        db.commit()
+
+        result = patch_transaction(
+            transaction.id,
+            TransactionPatch(category="Shopping", excluded_from_analytics=True, manual_note="Controllata"),
+            db,
+        )
+
+        saved = db.get(Transaction, transaction.id)
+        assert result.category == "Shopping"
+        assert saved.category == "Shopping"
+        assert saved.category_source == "manual"
+        assert saved.excluded_from_analytics is True
+        assert saved.manual_note == "Controllata"
 
 
 def test_import_history_shows_statement_period_and_sorts_rows():

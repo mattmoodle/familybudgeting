@@ -449,7 +449,8 @@ async function refreshReviewCategories(selectedName,targetId){
   });
 }
 function openEdit(id,category,excluded,recurrenceCadence){document.getElementById('edit-id').value=id;document.getElementById('edit-category').value=category;document.getElementById('edit-excluded').checked=!excluded;document.getElementById('edit-create-rule').checked=false;document.getElementById('edit-recurring').checked=Boolean(recurrenceCadence);document.getElementById('edit-recurrence-cadence').disabled=!recurrenceCadence;document.getElementById('edit-recurrence-cadence').value=recurrenceCadence||'monthly';document.getElementById('edit-note').value='';document.getElementById('edit-dialog').showModal();}
-async function toggleBudgetCount(id,isCurrentlyCounted,button){const nextCounted=!isCurrentlyCounted;const message=nextCounted?'Includere questa transazione nel budget e nelle analisi?':'Non conteggiare questa transazione nel budget e nelle analisi? Rimarrà visibile come dettaglio.';if(!confirm(message))return;button.disabled=true;const response=await fetch(`/api/transactions/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({excluded_from_analytics:!nextCounted})});if(response.ok){location.reload()}else{button.disabled=false;const data=await response.json();alert(data.detail||'Impossibile aggiornare il conteggio del budget.');}}
+function reloadWithAppliedFilters(){const url=new URL(window.location.href);url.searchParams.set('_updated',Date.now().toString());window.location.replace(url.toString());}
+async function toggleBudgetCount(id,isCurrentlyCounted,button){const nextCounted=!isCurrentlyCounted;const message=nextCounted?'Includere questa transazione nel budget e nelle analisi?':'Non conteggiare questa transazione nel budget e nelle analisi? Rimarrà visibile come dettaglio.';if(!confirm(message))return;button.disabled=true;const response=await fetch(`/api/transactions/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({excluded_from_analytics:!nextCounted})});if(response.ok){reloadWithAppliedFilters()}else{button.disabled=false;const data=await response.json();alert(data.detail||'Impossibile aggiornare il conteggio del budget.');}}
 
 const cadenceLabels={weekly:'Settimanale',biweekly:'Bisettimanale',monthly:'Mensile',bimonthly:'Bimestrale',quarterly:'Trimestrale',semiannual:'Semestrale',annual:'Annuale'};
 async function openForecastDetails(merchant,category,cadence,expectedOn,amount){
@@ -459,7 +460,20 @@ async function openForecastDetails(merchant,category,cadence,expectedOn,amount){
 }
 
 document.getElementById('edit-recurring').addEventListener('change',e=>document.getElementById('edit-recurrence-cadence').disabled=!e.target.checked);
-document.getElementById('edit-form').addEventListener('submit',async e=>{e.preventDefault();const id=document.getElementById('edit-id').value,recurring=document.getElementById('edit-recurring').checked;const body={category:document.getElementById('edit-category').value,create_rule:document.getElementById('edit-create-rule').checked,excluded_from_analytics:!document.getElementById('edit-excluded').checked,manual_note:document.getElementById('edit-note').value,is_recurring:recurring,recurrence_cadence:recurring?document.getElementById('edit-recurrence-cadence').value:null};const r=await fetch(`/api/transactions/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(r.ok){location.reload()}else{const data=await r.json();document.getElementById('edit-status').textContent=data.detail||'Errore durante il salvataggio.';}});
+document.getElementById('edit-form').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const form=e.currentTarget, saveButton=form.querySelector('button[type="submit"]'), status=document.getElementById('edit-status');
+  const id=document.getElementById('edit-id').value, recurring=document.getElementById('edit-recurring').checked;
+  const body={category:document.getElementById('edit-category').value,create_rule:document.getElementById('edit-create-rule').checked,excluded_from_analytics:!document.getElementById('edit-excluded').checked,manual_note:document.getElementById('edit-note').value,is_recurring:recurring,recurrence_cadence:recurring?document.getElementById('edit-recurrence-cadence').value:null};
+  saveButton.disabled=true; status.textContent='Salvataggio…';
+  try{
+    const response=await fetch(`/api/transactions/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const data=await response.json();
+    if(!response.ok)throw new Error(data.detail||'Errore durante il salvataggio.');
+    document.getElementById('edit-dialog').close();
+    reloadWithAppliedFilters();
+  }catch(error){saveButton.disabled=false;status.textContent=error.message||'Errore durante il salvataggio.';}
+});
 
 const selectPage=document.getElementById('select-page'), bulkAction=document.getElementById('bulk-action'), bulkCategory=document.getElementById('bulk-category'), bulkApply=document.getElementById('bulk-apply');
 function selectedTransactions(){return [...document.querySelectorAll('.transaction-select:checked')];}
