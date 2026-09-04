@@ -65,6 +65,7 @@ from app.services.backup_export import (
     validate_backup,
 )
 from app.services.budgeting import budget_vs_actual, copy_budgets, delete_budget, upsert_budget
+from app.services.classification import rule_pattern_for_transaction
 from app.services.human_check import batch_progress, finalize_human_check
 from app.services.import_service import delete_import_batch, import_statement
 from app.services.normalization import normalize_description
@@ -361,6 +362,13 @@ def rules_page(
 ):
     """Show all locally learned classification rules for manual fine-tuning."""
     rules = db.scalars(select(Rule)).all()
+    active_categories_by_pattern: dict[str, set[str]] = {}
+    for rule in rules:
+        if rule.active:
+            pattern = normalize_description(rule.pattern)
+            active_categories_by_pattern.setdefault(pattern, set()).add(rule.category)
+    conflicting_patterns = {pattern for pattern, categories_for_pattern in active_categories_by_pattern.items() if len(categories_for_pattern) > 1}
+    rule_conflicts = {rule.id: len(active_categories_by_pattern[normalize_description(rule.pattern)]) for rule in rules if rule.active and normalize_description(rule.pattern) in conflicting_patterns}
     search = (rules_q or "").strip().casefold()
     rules = [
         rule for rule in rules
@@ -385,6 +393,7 @@ def rules_page(
         context={
             "rules": rules,
             "categories": categories,
+            "rule_conflicts": rule_conflicts,
             "rule_filters": {
                 "q": rules_q or "", "category": rules_category or "", "status": rules_status or "",
                 "source": rules_source or "", "sort": selected_sort, "direction": "desc" if descending else "asc",
@@ -537,8 +546,7 @@ def patch_transaction(transaction_id: int, payload: TransactionPatch, db: Sessio
         tx.category_confidence = 1
         tx.category_source = "manual"
         if payload.create_rule and payload.category != "Uncategorized":
-            pattern = normalize_description(tx.description)
-            pattern = " ".join(pattern.split()[:4])
+            pattern = rule_pattern_for_transaction(tx.description, db)
             if pattern and not db.scalar(select(Rule).where(Rule.pattern == pattern, Rule.category == payload.category)):
                 db.add(Rule(pattern=pattern, category=payload.category, priority=10, created_from_manual_correction=True))
     if payload.excluded_from_analytics is not None:
