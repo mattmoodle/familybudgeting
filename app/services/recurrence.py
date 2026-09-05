@@ -155,6 +155,7 @@ def delete_recurrence_override(db: Session, pattern_key: str, commit: bool = Tru
 
 def _apply_overrides(db: Session, patterns: list[RecurringPattern], include_rejected: bool = False) -> list[RecurringPattern]:
     overrides = {o.pattern_key: o for o in db.scalars(select(RecurrenceOverride)).all()}
+    aliases = _recurrence_aliases(db)
     result: list[RecurringPattern] = []
     for pattern in patterns:
         override = overrides.get(pattern.key)
@@ -175,10 +176,23 @@ def _apply_overrides(db: Session, patterns: list[RecurringPattern], include_reje
             management_status=override.status, manual_override=True, note=override.note,
             display_name=override.display_name,
         ))
+    # Human-check and transaction edits can create a manual recurrence before
+    # there are enough ledger rows for automatic detection.  If those merchants
+    # were later merged, aggregate their manual overrides under the canonical
+    # name too, rather than showing stale one-row groups.
+    canonical_manual_groups: dict[tuple[str, str, str], list[RecurrenceOverride]] = defaultdict(list)
+    detected_keys = {(pattern.merchant, pattern.category) for pattern in result}
     for override in overrides.values():
         if not override.pattern_key.startswith("manual:") or (override.status == "rejected" and not include_rejected):
             continue
         if not override.override_amount or not override.override_next_expected or not override.override_cadence:
+            continue
+        canonical_merchant = aliases.get((override.merchant, override.category), override.merchant)
+        if canonical_merchant != override.merchant:
+            # An automatically detected group already represents these rows.
+            if (canonical_merchant, override.category) in detected_keys:
+                continue
+            canonical_manual_groups[(canonical_merchant, override.category, override.override_cadence)].append(override)
             continue
         result.append(RecurringPattern(
             key=override.pattern_key, merchant=override.merchant, category=override.category,
@@ -187,6 +201,24 @@ def _apply_overrides(db: Session, patterns: list[RecurringPattern], include_reje
             cost_type="fixed", confidence=Decimal("1.000"), last_seen=override.override_next_expected,
             next_expected=override.override_next_expected, management_status=override.status,
             manual_override=True, note=override.note, display_name=override.display_name,
+        ))
+
+    for (merchant, category, cadence), group in canonical_manual_groups.items():
+        amounts = [item.override_amount for item in group if item.override_amount is not None]
+        next_dates = [item.override_next_expected for item in group if item.override_next_expected is not None]
+        assert amounts and next_dates  # Guaranteed by the validation above.
+        average_amount = (sum(amounts, ZERO) / Decimal(len(amounts))).quantize(Decimal("0.01"))
+        # A confirmed item is enough to keep the manually-created group active.
+        status = "confirmed" if any(item.status == "confirmed" for item in group) else group[0].status
+        display_name = next((item.display_name for item in group if item.display_name), None)
+        notes = [item.note for item in group if item.note]
+        result.append(RecurringPattern(
+            key=f"manual:alias:{merchant}|{category}", merchant=merchant, category=category,
+            cadence=cadence, interval_days=_canonical_days_for_cadence(cadence),
+            occurrences=len(group), average_amount=average_amount, amount_variation=ZERO,
+            cost_type="fixed", confidence=Decimal("1.000"), last_seen=max(next_dates),
+            next_expected=min(next_dates), management_status=status, manual_override=True,
+            note=" · ".join(notes) or None, display_name=display_name,
         ))
     return sorted(result, key=lambda item: (item.next_expected, -item.confidence))
 
@@ -331,7 +363,10 @@ def supporting_transactions_for_recurrence(
         )
         .order_by(Transaction.booked_on.desc(), Transaction.id.desc())
     ).all()
-    original_merchant = pattern_key.split("|", 1)[0] if pattern_key and "|" in pattern_key else merchant
+    if pattern_key and pattern_key.startswith("manual:alias:"):
+        original_merchant = pattern_key.removeprefix("manual:alias:").split("|", 1)[0]
+    else:
+        original_merchant = pattern_key.split("|", 1)[0] if pattern_key and "|" in pattern_key else merchant
     aliases = _recurrence_aliases(db)
     return [tx for tx in candidates if _pattern_key(tx, aliases)[0] == original_merchant][:max(1, min(limit, 10))]
 

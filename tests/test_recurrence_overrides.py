@@ -5,7 +5,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from app.db.base import Base
-from app.models.entities import Account, Category, Transaction
+from app.models.entities import Account, Category, RecurrenceAlias, Transaction
 from app.services.budgeting import budget_vs_actual, upsert_budget
 from app.services.recurrence import (
     detect_recurring_patterns,
@@ -115,3 +115,36 @@ def test_budget_forecast_honours_manual_recurrence_override():
         housing = next(i for i in report["items"] if i["category"] == "Housing")
         assert housing["recurring_future"] == Decimal("1100.00")
         assert housing["projected"] == Decimal("1100.00")
+
+
+def test_aliases_group_manual_recurrences_and_show_the_new_name():
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    with Session(engine) as db:
+        account = Account(name="Bank", account_type="bank")
+        db.add_all([account, Category(name="Subscriptions")])
+        db.flush()
+        # Two rows are intentionally insufficient for automatic detection.
+        db.add_all([
+            tx(account.id, date(2026, 6, 24), "-21.07", "Subscriptions", "openai chatgpt subscr san francisco ca24"),
+            tx(account.id, date(2026, 7, 24), "-21.36", "Subscriptions", "openai chatgpt subscr san francisco ca"),
+            RecurrenceAlias(source_merchant="openai chatgpt subscr san francisco ca24", category="Subscriptions", canonical_merchant="ChatGPT"),
+            RecurrenceAlias(source_merchant="openai chatgpt subscr san francisco ca", category="Subscriptions", canonical_merchant="ChatGPT"),
+        ])
+        db.commit()
+        upsert_recurrence_override(
+            db, "manual:human-check:1", "openai chatgpt subscr san francisco ca24", "Subscriptions", "confirmed",
+            override_amount=Decimal("21.07"), override_next_expected=date(2026, 8, 24), override_cadence="monthly",
+        )
+        upsert_recurrence_override(
+            db, "manual:human-check:2", "openai chatgpt subscr san francisco ca", "Subscriptions", "confirmed",
+            override_amount=Decimal("21.36"), override_next_expected=date(2026, 8, 24), override_cadence="monthly",
+        )
+
+        patterns = detect_recurring_patterns(db)
+
+        assert len(patterns) == 1
+        assert patterns[0].merchant == "ChatGPT"
+        assert patterns[0].key == "manual:alias:ChatGPT|Subscriptions"
+        assert patterns[0].occurrences == 2
+        assert patterns[0].average_amount == Decimal("21.22")
